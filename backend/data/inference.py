@@ -42,15 +42,28 @@ import pandas as pd
 import requests
 
 # ── Import everything already written in train.py ────────────────────────────
-from train import (
-    predict_single,
-    THRESHOLDS,
-    FEATURE_COLUMNS,
-    ANOMALY_TYPES,
-    classify_anomaly_type,
-    severity_level,
-    load_satellite_data,
-)
+try:
+    # Package import (backend.data.inference)
+    from .train import (
+        predict_single,
+        THRESHOLDS,
+        FEATURE_COLUMNS,
+        ANOMALY_TYPES,
+        classify_anomaly_type,
+        severity_level,
+        load_satellite_data,
+    )
+except ImportError:
+    # Fallback when this file is run directly
+    from train import (
+        predict_single,
+        THRESHOLDS,
+        FEATURE_COLUMNS,
+        ANOMALY_TYPES,
+        classify_anomaly_type,
+        severity_level,
+        load_satellite_data,
+    )
 
 log = logging.getLogger(__name__)
 
@@ -376,6 +389,30 @@ class AquaSenseInference:
         if not model_path.exists():
             raise FileNotFoundError(f"Model not found: {model_path}")
         self._pipeline = joblib.load(model_path)
+        self._feature_columns = FEATURE_COLUMNS
+
+        # Prefer persisted training feature names when available so inference
+        # stays compatible with older models.
+        metadata_path = model_path.with_name("model_metadata.json")
+        if metadata_path.exists():
+            try:
+                metadata = json.loads(metadata_path.read_text())
+                meta_features = metadata.get("feature_names")
+                if isinstance(meta_features, list) and meta_features:
+                    self._feature_columns = [str(col) for col in meta_features]
+            except Exception as exc:
+                log.warning(f"Failed to read feature names from {metadata_path}: {exc}")
+
+        scaler = self._pipeline.named_steps.get("scaler") if hasattr(self._pipeline, "named_steps") else None
+        expected_count = getattr(scaler, "n_features_in_", None)
+        if expected_count and len(self._feature_columns) != expected_count:
+            log.warning(
+                "Feature count mismatch (configured=%s, expected=%s). Falling back to train FEATURE_COLUMNS slice.",
+                len(self._feature_columns),
+                expected_count,
+            )
+            self._feature_columns = FEATURE_COLUMNS[:expected_count]
+
         log.info(f"Model loaded from {model_path}")
 
         self._sat_path = Path(satellite_parquet)
@@ -508,7 +545,7 @@ class AquaSenseInference:
             rule_score = 0.55   # single-parameter threshold breach
 
         # ── Call train.py predict_single — the actual RF ──────────────────────
-        train_result  = predict_single(self._pipeline, FEATURE_COLUMNS, obs)
+        train_result  = predict_single(self._pipeline, self._feature_columns, obs)
         rf_score      = train_result["anomaly_score"]
 
         # Take the maximum of RF score and rule-based score so neither can be

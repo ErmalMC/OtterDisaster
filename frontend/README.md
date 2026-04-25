@@ -1,30 +1,26 @@
-# WaterGuard Frontend Demo
+# Frontend
 
-This Vite + React app now runs a **WaterGuard-style real-time river monitoring dashboard** for the Vardar River demo scenario.
+React + Vite dashboard for the OtterDisaster backend.
 
-It includes:
+## API integration
 
-- TailwindCSS-driven dashboard UI (no custom component stylesheet required)
-- historical seed data generation (55 weeks)
-- live reading injection controls for scenario, rainfall, and temperature
-- mock satellite band integration (B03/B04/B07/B08/B11) with local cache
-- browser-side anomaly scoring + severity classification
-- map panel, alert feed, metric cards, trend charts, and diagnosis reference table
+- Uses `src/utils/aquaSenseApi.js`
+- Calls `/api/health`, `/api/predict`, and `/api/reload_satellite`
+- In local development, Vite proxies `/api/*` to `http://127.0.0.1:5000`
 
-## Quick start
+## Run
 
 ```bash
 npm install
 npm run dev
 ```
 
-Then open the local URL Vite prints in the terminal.
+## Optional environment variables
 
-## Current data mode
+Copy `.env.example` to `.env` and edit if needed.
 
-For now, the frontend uses **mock satellite fetches only** and stores results in browser local storage to mimic caching.
-
-When your Python backend is ready, we can wire the fetch service to your API in a small follow-up change.
+- `VITE_API_BASE_URL` (default: `/api`)
+- `VITE_BACKEND_ORIGIN` (default: `http://127.0.0.1:5000`)
 
 ## Scripts
 
@@ -35,11 +31,3 @@ npm run build
 npm run preview
 ```
 
-## Project structure
-
-- `src/hooks/useWaterGuard.js` app orchestration state and actions
-- `src/services/simulatorService.js` telemetry generation and historical seed
-- `src/services/satelliteService.js` mock satellite fetch + local cache
-- `src/utils/anomalyDetection.js` in-browser anomaly scoring and diagnosis
-- `src/components/*` dashboard UI panels
-- `src/App.jsx` shell composition

@@ -4,17 +4,17 @@ AquaSense — Flask API Server
 Exposes the inference engine over HTTP so the UI can call it.
 
 Endpoints:
-  POST /predict           — live Arduino reading → anomaly result
-  GET  /health            — health check + satellite age
-  POST /reload_satellite  — call after a new OpenEO download completes
+  POST /api/predict           — live Arduino reading → anomaly result
+  GET  /api/health            — health check + satellite age
+  POST /api/reload_satellite  — call after a new OpenEO download completes
 
 Run:
     pip install flask
     python api.py
 
 Environment variables:
-    MODEL_PATH      path to rf_anomaly_model.pkl   (default: models/rf_anomaly_model.pkl)
-    SAT_PARQUET     path to vardar_wq_merged.parquet (default: vardar_wq_results/vardar_wq_merged.parquet)
+    MODEL_PATH      path to rf_anomaly_model.pkl   (default: backend/models/rf_anomaly_model.pkl)
+    SAT_PARQUET     path to vardar_wq_merged.parquet (default: backend/data/vardar_wq_results/vardar_wq_merged.parquet)
     LAT             latitude  (default: 41.99)
     LON             longitude (default: 21.43)
     PORT            port      (default: 5000)
@@ -23,6 +23,7 @@ Environment variables:
 import logging
 import os
 from datetime import datetime
+from pathlib import Path
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -35,9 +36,15 @@ log = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)   # allow the UI (different port) to call the API
 
+API_PREFIX = "/api"
+
 # ── Initialise engine at startup ─────────────────────────────────────────────
-MODEL_PATH  = os.environ.get("MODEL_PATH",  "models/rf_anomaly_model.pkl")
-SAT_PARQUET = os.environ.get("SAT_PARQUET", "vardar_wq_results/vardar_wq_merged.parquet")
+BACKEND_DIR = Path(__file__).resolve().parent
+MODEL_PATH  = os.environ.get("MODEL_PATH", str(BACKEND_DIR / "models" / "rf_anomaly_model.pkl"))
+SAT_PARQUET = os.environ.get(
+    "SAT_PARQUET",
+    str(BACKEND_DIR / "data" / "vardar_wq_results" / "vardar_wq_merged.parquet"),
+)
 LAT         = float(os.environ.get("LAT", 41.99))
 LON         = float(os.environ.get("LON", 21.43))
 
@@ -57,6 +64,7 @@ def get_engine() -> AquaSenseInference:
 
 # ── Routes ───────────────────────────────────────────────────────────────────
 
+@app.route(f"{API_PREFIX}/predict", methods=["POST"])
 @app.route("/predict", methods=["POST"])
 def predict():
     """
@@ -102,6 +110,7 @@ def predict():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route(f"{API_PREFIX}/health", methods=["GET"])
 @app.route("/health", methods=["GET"])
 def health():
     """Returns model status and satellite freshness."""
@@ -122,6 +131,7 @@ def health():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
+@app.route(f"{API_PREFIX}/reload_satellite", methods=["POST"])
 @app.route("/reload_satellite", methods=["POST"])
 def reload_satellite():
     """Hot-reload satellite data after a new OpenEO download."""

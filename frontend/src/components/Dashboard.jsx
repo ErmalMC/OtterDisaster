@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CircleMarker,
   MapContainer,
@@ -7,81 +7,15 @@ import {
   Tooltip,
   ZoomControl,
 } from "react-leaflet";
-// import { Otter } from "./Otter.jsx";
+
+import { fetchHealth, predictWaterQuality } from "../utils/aquaSenseApi.js";
 
 const MAP_CENTER = [41.9973, 21.428];
 const MAP_ZOOM = 12;
-
-const SENSOR_POINTS = [
-  {
-    id: "otter-04",
-    position: [41.9973, 21.428],
-    active: false,
-    label: "OTTER-04",
-    reading: "WQI 94",
-    status: "Optimal",
-    depth: "3.2 m",
-    note: "Primary telemetry unit",
-  },
-  {
-    id: "sensor-2",
-    position: [42.0038, 21.454],
-    label: "OTTER-05",
-    reading: "WQI 89",
-    status: "Stable",
-    depth: "2.6 m",
-    note: "Secondary sampling point",
-  },
-  {
-    id: "sensor-3",
-    position: [41.9856, 21.402],
-    idle: true,
-    label: "OTTER-06",
-    reading: "Standby",
-    status: "Idle",
-    depth: "N/A",
-    note: "Awaiting activation",
-  },
-];
-
-const baseMetrics = [
-  {
-    key: "do",
-    label: "Dissolved O₂",
-    value: "8.42",
-    unit: "mg/L",
-    status: "good",
-    hint: "+0.2 vs baseline",
-    bar: 84,
-  },
-  {
-    key: "turb",
-    label: "Turbidity",
-    value: "1.2",
-    unit: "NTU",
-    status: "good",
-    hint: "Very clear",
-    bar: 15,
-  },
-  {
-    key: "ph",
-    label: "pH Level",
-    value: "7.42",
-    unit: "pH",
-    status: "good",
-    hint: "Neutral range",
-    bar: 60,
-  },
-  {
-    key: "temp",
-    label: "Temperature",
-    value: "14.2",
-    unit: "°C",
-    status: "good",
-    hint: "Optimal",
-    bar: 50,
-  },
-];
+const DEFAULT_SENSOR_INPUT = {
+  tds: 420,
+  ph: 7.2,
+};
 
 const statusColor = {
   good: "var(--status-good)",
@@ -89,24 +23,253 @@ const statusColor = {
   poor: "var(--status-poor)",
 };
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function toNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function formatTime(value) {
+  if (!value) {
+    return "—";
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString();
+}
+
+function getMetricTone(metric, prediction, health, sensorInput) {
+  if (metric === "tds") {
+    const tds = prediction?.sensor?.tds_ppm ?? toNumber(sensorInput.tds, DEFAULT_SENSOR_INPUT.tds);
+    if (prediction?.is_anomaly || tds > 1000) return "poor";
+    if (tds > 600) return "fair";
+    return "good";
+  }
+
+  if (metric === "ph") {
+    const ph = prediction?.sensor?.ph ?? toNumber(sensorInput.ph, DEFAULT_SENSOR_INPUT.ph);
+    if (ph < 6 || ph > 8.5) return "poor";
+    if (ph < 6.5 || ph > 8) return "fair";
+    return "good";
+  }
+
+  if (metric === "confidence") {
+    const confidence = prediction?.confidence_pct ?? 0;
+    if (confidence >= 85) return "good";
+    if (confidence >= 65) return "fair";
+    return "poor";
+  }
+
+  if (metric === "satellite") {
+    const age = prediction?.satellite_age_days ?? health?.satellite_age_days ?? 0;
+    if (age <= 2) return "good";
+    if (age <= 5) return "fair";
+    return "poor";
+  }
+
+  return "good";
+}
+
+function buildMetrics(prediction, health, sensorInput) {
+  const tds = prediction?.sensor?.tds_ppm ?? toNumber(sensorInput.tds, DEFAULT_SENSOR_INPUT.tds);
+  const ph = prediction?.sensor?.ph ?? toNumber(sensorInput.ph, DEFAULT_SENSOR_INPUT.ph);
+  const confidence = prediction?.confidence_pct ?? 0;
+  const satelliteAge = prediction?.satellite_age_days ?? health?.satellite_age_days ?? 0;
+
+  return [
+    {
+      key: "tds",
+      label: "TDS",
+      value: tds.toFixed(1),
+      unit: "ppm",
+      status: getMetricTone("tds", prediction, health, sensorInput),
+      hint: prediction?.is_anomaly ? "Backend flagged elevated conditions" : "Live sensor payload",
+      bar: clamp((tds / 1000) * 100, 8, 100),
+    },
+    {
+      key: "ph",
+      label: "pH",
+      value: ph.toFixed(2),
+      unit: "pH",
+      status: getMetricTone("ph", prediction, health, sensorInput),
+      hint: prediction?.water_body ? `Thresholds tuned for ${prediction.water_body}` : "Awaiting backend tune",
+      bar: clamp((1 - Math.abs(ph - 7) / 7) * 100, 10, 100),
+    },
+    {
+      key: "confidence",
+      label: "Confidence",
+      value: confidence.toFixed(0),
+      unit: "%",
+      status: getMetricTone("confidence", prediction, health, sensorInput),
+      hint: prediction ? `Data mode: ${prediction.data_mode}` : "Run a prediction",
+      bar: clamp(confidence, 5, 100),
+    },
+    {
+      key: "satellite",
+      label: "Satellite age",
+      value: satelliteAge.toFixed(0),
+      unit: "days",
+      status: getMetricTone("satellite", prediction, health, sensorInput),
+      hint: health?.satellite_freshness
+        ? `Freshness: ${health.satellite_freshness}`
+        : "Backend health pending",
+      bar: clamp(satelliteAge <= 2 ? 84 : satelliteAge <= 5 ? 62 : 36, 20, 100),
+    },
+  ];
+}
+
 export function Dashboard({ onReset }) {
-  const [metrics, setMetrics] = useState(baseMetrics);
+  const [sensorInput, setSensorInput] = useState(DEFAULT_SENSOR_INPUT);
+  const [health, setHealth] = useState(null);
+  const [prediction, setPrediction] = useState(null);
+  const [loadingHealth, setLoadingHealth] = useState(true);
+  const [loadingPrediction, setLoadingPrediction] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [healthError, setHealthError] = useState("");
+  const [predictionError, setPredictionError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
   const [time, setTime] = useState(new Date());
 
-  // Subtle live drift on values
-  useEffect(() => {
-    const id = setInterval(() => {
-      setMetrics((prev) =>
-        prev.map((m) => {
-          const v = parseFloat(m.value);
-          const drift = (Math.random() - 0.5) * (m.key === "temp" ? 0.2 : 0.05);
-          return { ...m, value: (v + drift).toFixed(m.key === "turb" ? 1 : 2) };
-        }),
-      );
-      setTime(new Date());
-    }, 2500);
-    return () => clearInterval(id);
+  const refreshHealth = useCallback(async () => {
+    setLoadingHealth(true);
+    try {
+      const data = await fetchHealth();
+      setHealth(data);
+      setHealthError("");
+    } catch (error) {
+      setHealth(null);
+      setHealthError(error instanceof Error ? error.message : "Failed to load backend health.");
+    } finally {
+      setLoadingHealth(false);
+    }
   }, []);
+
+  const runPrediction = useCallback(
+    async (reading = sensorInput, { silent = false } = {}) => {
+      const payload = {
+        tds: toNumber(reading.tds, DEFAULT_SENSOR_INPUT.tds),
+        ph: toNumber(reading.ph, DEFAULT_SENSOR_INPUT.ph),
+      };
+
+      if (!silent) {
+        setSubmitting(true);
+      }
+      setLoadingPrediction(true);
+
+      try {
+        const data = await predictWaterQuality(payload);
+        setPrediction(data);
+        setPredictionError("");
+        setLastUpdated(new Date());
+      } catch (error) {
+        setPrediction(null);
+        setPredictionError(error instanceof Error ? error.message : "Prediction request failed.");
+      } finally {
+        setLoadingPrediction(false);
+        if (!silent) {
+          setSubmitting(false);
+        }
+      }
+    },
+    [sensorInput],
+  );
+
+  useEffect(() => {
+    let alive = true;
+
+    const bootstrap = async () => {
+      await Promise.allSettled([
+        refreshHealth(),
+        runPrediction(DEFAULT_SENSOR_INPUT, { silent: true }),
+      ]);
+      if (alive) {
+        setTime(new Date());
+      }
+    };
+
+    bootstrap();
+
+    const healthTimer = setInterval(() => {
+      refreshHealth();
+    }, 30000);
+
+    const clockTimer = setInterval(() => {
+      setTime(new Date());
+    }, 1000);
+
+    return () => {
+      alive = false;
+      clearInterval(healthTimer);
+      clearInterval(clockTimer);
+    };
+  }, [refreshHealth, runPrediction]);
+
+  const metrics = useMemo(() => buildMetrics(prediction, health, sensorInput), [prediction, health, sensorInput]);
+  const anomalyScore = prediction?.adjusted_score ?? prediction?.anomaly_score ?? 0;
+  const qualityIndex = prediction ? clamp(Math.round(100 - anomalyScore * 100), 0, 100) : 94;
+  const isHealthy = health?.status === "ok" && !healthError;
+  const headline = prediction ? (prediction.is_anomaly ? "Attention required" : "Stable") : "Awaiting backend";
+  const statusLabel = loadingHealth
+    ? "Connecting to API"
+    : isHealthy
+      ? `Live · ${health.satellite_freshness}`
+      : healthError
+        ? "Backend offline"
+        : "Health unknown";
+  const readingLabel = `${toNumber(sensorInput.tds, DEFAULT_SENSOR_INPUT.tds).toFixed(1)} ppm · pH ${toNumber(sensorInput.ph, DEFAULT_SENSOR_INPUT.ph).toFixed(2)}`;
+  const message = prediction?.message ?? "Submit a reading to query the Flask backend and display a real anomaly verdict.";
+  const explanation = prediction?.explanation ?? "The dashboard will update once the backend responds with a prediction payload.";
+
+  const sensorPoints = useMemo(
+    () => [
+      {
+        id: "otter-04",
+        position: MAP_CENTER,
+        active: Boolean(prediction?.is_anomaly),
+        label: "OTTER-04",
+        reading: prediction ? readingLabel : "Waiting for reading",
+        status: prediction ? (prediction.is_anomaly ? "Alert" : "Stable") : "Listening",
+        depth: "Surface telemetry",
+        note: prediction?.message ?? "Reading will be forwarded to `/predict`.",
+      },
+      {
+        id: "sensor-2",
+        position: [42.0038, 21.454],
+        label: "OTTER-05",
+        reading: health ? `${health.satellite_age_days ?? "?"} day satellite age` : "Health pending",
+        status: health?.satellite_freshness ?? "Standby",
+        depth: "2.6 m",
+        note: health ? `Model loaded: ${health.model_loaded ? "yes" : "no"}` : "Waiting for `/health`.",
+      },
+      {
+        id: "sensor-3",
+        position: [41.9856, 21.402],
+        idle: true,
+        label: "OTTER-06",
+        reading: prediction ? `${prediction.data_mode} mode` : "Idle",
+        status: prediction?.low_confidence_warning ? "Low confidence" : "Idle",
+        depth: "N/A",
+        note: prediction?.weather?.note ?? "Awaiting weather-aware prediction.",
+      },
+    ],
+    [health, prediction, readingLabel],
+  );
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    await runPrediction(sensorInput);
+  };
+
+  const handleChange = (key) => (event) => {
+    const value = event.target.value;
+    setSensorInput((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  };
 
   return (
     <div className="h-dvh w-full relative bg-[var(--metal-200)] font-sans text-[var(--metal-800)] overflow-hidden flex animate-[fade-in_0.6s_ease-out]">
@@ -127,10 +290,8 @@ export function Dashboard({ onReset }) {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          {SENSOR_POINTS.map((point) => {
-            const color = point.idle
-              ? "oklch(0.75 0.05 80)"
-              : "var(--aqua-glow)";
+          {sensorPoints.map((point) => {
+            const color = point.idle ? "oklch(0.75 0.05 80)" : "var(--aqua-glow)";
             return (
               <CircleMarker
                 key={point.id}
@@ -157,11 +318,7 @@ export function Dashboard({ onReset }) {
                   />
                 )}
                 {point.label && point.reading && (
-                  <Tooltip
-                    direction="top"
-                    offset={[0, -8]}
-                    permanent={point.active}
-                  >
+                  <Tooltip direction="top" offset={[0, -8]} permanent={point.active}>
                     <div className="font-data text-[10px] uppercase tracking-widest text-[var(--metal-700)]">
                       {point.label}
                     </div>
@@ -195,11 +352,11 @@ export function Dashboard({ onReset }) {
         </MapContainer>
         <div className="absolute inset-0 pointer-events-none bg-gradient-to-br from-[var(--aqua-100)]/30 via-transparent to-[var(--aqua-500)]/15 mix-blend-multiply" />
         <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:80px_80px]" />
-        {/* Scanline */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="w-full h-32 bg-gradient-to-b from-transparent via-[var(--aqua-glow)]/10 to-transparent animate-[scanline_9s_linear_infinite]" />
         </div>
       </div>
+
       {/* Top right status */}
       <div className="absolute top-6 right-6 z-20 flex gap-3">
         <button
@@ -222,17 +379,14 @@ export function Dashboard({ onReset }) {
           Back to Manual
         </button>
         <div className="bg-white/80 backdrop-blur-xl border border-white shadow-[var(--shadow-glass)] rounded-full px-4 py-2 flex items-center gap-2.5">
-          <div className="size-2 rounded-full bg-[var(--status-good)] shadow-[0_0_8px_var(--status-good)] animate-pulse" />
+          <div
+            className={`size-2 rounded-full ${isHealthy ? "bg-[var(--status-good)]" : "bg-[var(--status-fair)]"} shadow-[0_0_8px_var(--status-good)] animate-pulse`}
+          />
           <span className="font-data text-[10px] font-semibold tracking-[0.2em] text-[var(--metal-800)] uppercase">
-            Live · GPS Linked
+            {statusLabel}
           </span>
         </div>
       </div>
-
-      {/* Otter swimming - bottom right */}
-      {/*<div className="absolute bottom-8 right-8 z-20 w-32 opacity-90 pointer-events-none animate-[swim_8s_ease-in-out_infinite]">*/}
-      {/*  <Otter className="w-full drop-shadow-lg" />*/}
-      {/*</div>*/}
 
       {/* Main panel */}
       <aside className="relative z-20 w-[440px] max-w-[92vw] h-[calc(100dvh-3rem)] m-6 flex flex-col gap-4 animate-[fade-up_0.6s_ease-out_0.1s_both]">
@@ -243,7 +397,7 @@ export function Dashboard({ onReset }) {
           <div className="absolute bottom-2 left-2 size-2 border-b border-l border-[var(--metal-300)]" />
           <div className="absolute bottom-2 right-2 size-2 border-b border-r border-[var(--metal-300)]" />
 
-          <div className="flex justify-between items-start mb-5">
+          <div className="flex justify-between items-start mb-5 gap-4">
             <div>
               <p className="font-data text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--aqua-600)] mb-1">
                 Sector Alpha-9
@@ -255,105 +409,197 @@ export function Dashboard({ onReset }) {
                 41.9973° N · 21.4280° E
               </p>
             </div>
-            <div className="size-10 rounded-xl bg-[var(--metal-900)] flex items-center justify-center shadow-inner">
+            <div className="size-10 rounded-xl bg-[var(--metal-900)] flex items-center justify-center shadow-inner shrink-0">
               <div className="size-1.5 rounded-full bg-[var(--aqua-glow)] shadow-[0_0_8px_var(--aqua-glow)]" />
             </div>
           </div>
 
-          {/* WQI badge */}
-          <div className="bg-gradient-to-r from-[oklch(0.95_0.06_160)] to-[var(--aqua-100)] border border-[oklch(0.85_0.1_160)]/30 rounded-2xl p-4 flex items-center justify-between">
+          <div className="bg-gradient-to-r from-[oklch(0.95_0.06_160)] to-[var(--aqua-100)] border border-[oklch(0.85_0.1_160)]/30 rounded-2xl p-4 flex items-center justify-between gap-4">
             <div>
               <p className="font-data text-[11px] uppercase tracking-widest text-[oklch(0.45_0.12_160)] font-semibold mb-0.5">
                 Water Quality Index
               </p>
               <p className="text-[var(--metal-900)] font-medium text-sm">
-                Optimal Conditions
+                {headline}
               </p>
             </div>
-            <div className="bg-white rounded-xl px-3.5 py-2 shadow-sm border border-white">
+            <div className="bg-white rounded-xl px-3.5 py-2 shadow-sm border border-white text-right">
               <span className="font-data text-3xl font-bold text-[var(--status-good)] tabular-nums">
-                94
+                {qualityIndex}
               </span>
               <span className="font-data text-xs text-[var(--metal-500)] ml-1">
                 /100
               </span>
             </div>
           </div>
+
+          <form onSubmit={handleSubmit} className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+            <label className="block">
+              <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold">
+                TDS
+              </span>
+              <input
+                type="number"
+                min="0"
+                max="10000"
+                step="0.1"
+                value={sensorInput.tds}
+                onChange={handleChange("tds")}
+                className="w-full rounded-2xl border border-[var(--metal-200)] bg-white/90 px-3 py-2 text-sm text-[var(--metal-900)] outline-none transition focus:border-[var(--aqua-300)] focus:ring-2 focus:ring-[var(--aqua-100)]"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold">
+                pH
+              </span>
+              <input
+                type="number"
+                min="0"
+                max="14"
+                step="0.01"
+                value={sensorInput.ph}
+                onChange={handleChange("ph")}
+                className="w-full rounded-2xl border border-[var(--metal-200)] bg-white/90 px-3 py-2 text-sm text-[var(--metal-900)] outline-none transition focus:border-[var(--aqua-300)] focus:ring-2 focus:ring-[var(--aqua-100)]"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="mt-auto rounded-2xl bg-[var(--metal-900)] px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {submitting ? "Querying backend..." : "Run prediction"}
+            </button>
+          </form>
+
+          <div className="mt-4 grid gap-2 rounded-2xl border border-[var(--metal-100)] bg-[var(--metal-50)] px-4 py-3">
+            <div className="flex items-center justify-between gap-3 text-xs text-[var(--metal-500)]">
+              <span>
+                {loadingHealth ? "Checking backend health..." : statusLabel}
+              </span>
+              <span>
+                Last prediction: {formatTime(lastUpdated)}
+              </span>
+            </div>
+            <p className="text-sm font-medium text-[var(--metal-900)]">
+              {message}
+            </p>
+            <p className="text-xs leading-relaxed text-[var(--metal-500)]">
+              {explanation}
+            </p>
+            {prediction?.weather?.note && (
+              <p className="text-xs leading-relaxed text-[var(--metal-500)]">
+                Weather note: {prediction.weather.note}
+              </p>
+            )}
+          </div>
         </div>
+
+        {(healthError || predictionError) && (
+          <div className="rounded-2xl border border-[var(--status-poor)]/30 bg-[oklch(0.97_0.03_25)] px-4 py-3 text-sm text-[var(--metal-800)] shadow-[var(--shadow-glass)]">
+            <strong className="mr-2 text-[var(--status-poor)]">Connection issue:</strong>
+            {healthError || predictionError}
+          </div>
+        )}
 
         {/* Metrics grid */}
         <div className="grid grid-cols-2 gap-3 shrink-0">
-          {metrics.map((m) => (
+          {metrics.map((metric) => (
             <div
-              key={m.key}
+              key={metric.key}
               className="bg-white/85 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-2xl p-5 group hover:border-[var(--aqua-300)] transition-colors"
             >
               <div className="flex justify-between items-center mb-3">
                 <span className="text-xs font-medium text-[var(--metal-500)]">
-                  {m.label}
+                  {metric.label}
                 </span>
                 <span
                   className="size-1.5 rounded-full"
-                  style={{ backgroundColor: statusColor[m.status] }}
+                  style={{ backgroundColor: statusColor[metric.status] }}
                 />
               </div>
               <div className="flex items-baseline gap-1">
                 <span className="font-data text-3xl font-semibold tracking-tight text-[var(--metal-900)] tabular-nums">
-                  {m.value}
+                  {metric.value}
                 </span>
                 <span className="font-data text-xs text-[var(--metal-500)]">
-                  {m.unit}
+                  {metric.unit}
                 </span>
               </div>
               <div className="w-full h-1 bg-[var(--metal-100)] rounded-full mt-3 overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-700"
                   style={{
-                    width: `${m.bar}%`,
-                    backgroundColor: statusColor[m.status],
+                    width: `${metric.bar}%`,
+                    backgroundColor: statusColor[metric.status],
                   }}
                 />
               </div>
               <p className="mt-2 text-[10px] text-[var(--metal-500)]">
-                {m.hint}
+                {metric.hint}
               </p>
             </div>
           ))}
         </div>
 
-        {/* Depth profile */}
+        {/* Depth profile / backend summary */}
         <div className="bg-white/85 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-3xl p-5 flex-1 flex flex-col min-h-0 overflow-hidden">
-          <div className="flex justify-between items-center mb-3 shrink-0">
+          <div className="flex justify-between items-center mb-3 shrink-0 gap-3">
             <h3 className="text-xs font-semibold text-[var(--metal-800)]">
-              Depth Profile · Last 12 min
+              Backend verdict · Live response
             </h3>
-            <span className="font-data text-[10px] text-[var(--aqua-600)] border border-[var(--aqua-300)]/40 bg-[var(--aqua-50)] px-2 py-0.5 rounded">
-              LIVE
+            <span className="font-data text-[10px] text-[var(--aqua-600)] border border-[var(--aqua-300)]/40 bg-[var(--aqua-50)] px-2 py-0.5 rounded whitespace-nowrap">
+              {prediction?.timestamp ? formatTime(prediction.timestamp) : "Awaiting query"}
             </span>
           </div>
+
+          <div className="grid gap-3 mb-3 shrink-0 sm:grid-cols-2">
+            <div className="rounded-2xl border border-[var(--metal-100)] bg-[var(--metal-50)] p-3">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold mb-1">
+                Anomaly state
+              </p>
+              <p className="text-sm font-medium text-[var(--metal-900)]">
+                {prediction ? (prediction.is_anomaly ? "Anomaly detected" : "Normal") : "Waiting for backend"}
+              </p>
+              <p className="mt-1 text-xs text-[var(--metal-500)]">
+                Severity: {prediction?.severity ?? "—"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[var(--metal-100)] bg-[var(--metal-50)] p-3">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold mb-1">
+                Data mode
+              </p>
+              <p className="text-sm font-medium text-[var(--metal-900)]">
+                {prediction?.data_mode ?? "—"}
+              </p>
+              <p className="mt-1 text-xs text-[var(--metal-500)]">
+                Confidence: {prediction?.confidence_pct ?? "—"}%
+              </p>
+            </div>
+          </div>
+
           <div className="flex-1 bg-[var(--metal-50)] rounded-2xl border border-[var(--metal-100)] relative overflow-hidden p-3 min-h-0">
             <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-1/4 left-0" />
             <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-2/4 left-0" />
             <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-3/4 left-0" />
             <div className="relative w-full h-full flex items-end justify-between gap-1">
-              {Array.from({ length: 18 }).map((_, i) => {
-                const h = 30 + Math.sin(i * 0.6 + time.getSeconds() * 0.1) * 25;
+              {Array.from({ length: 18 }).map((_, index) => {
+                const barHeight = 30 + Math.sin(index * 0.6 + time.getSeconds() * 0.1) * 25;
                 return (
                   <div
-                    key={i}
+                    key={index}
                     className="flex-1 bg-gradient-to-t from-[var(--aqua-500)] to-[var(--aqua-300)] rounded-t-sm transition-all duration-700 opacity-80"
-                    style={{ height: `${h}%` }}
+                    style={{ height: `${barHeight}%` }}
                   />
                 );
               })}
             </div>
           </div>
-          <div className="flex justify-between items-center mt-3 shrink-0">
+          <div className="flex justify-between items-center mt-3 shrink-0 gap-3">
             <span className="font-data text-[10px] text-[var(--metal-500)]">
-              Updated {time.toLocaleTimeString()}
+              Updated {formatTime(time)}
             </span>
             <span className="font-data text-[10px] text-[var(--metal-500)]">
-              Probe ID: 884-X
+              API: {loadingHealth ? "syncing" : health?.status ?? "offline"}
             </span>
           </div>
         </div>
