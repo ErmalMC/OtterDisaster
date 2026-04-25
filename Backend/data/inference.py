@@ -112,6 +112,15 @@ OPEN_METEO_URL = (
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fetch_weather(lat: float, lon: float, observation_date: datetime) -> dict:
+    import os
+    if os.environ.get("AQUASENSE_NO_WEATHER"):
+        return {
+            "total_rain_7d_mm": None,
+            "rain_on_day_mm":   None,
+            "rain_penalty":     0.0,
+            "weather_note":     "Weather fetch disabled (demo mode).",
+            "weather_ok":       False,
+        }
     try:
         url  = OPEN_METEO_URL.format(lat=lat, lon=lon)
         resp = requests.get(url, timeout=5)
@@ -270,6 +279,16 @@ def _build_feature_vector(
         obs["ndti_lag1"] = float(last.get("ndti", 0))
         obs["tds_delta"] = obs["tds"] - obs["tds_lag1"]
         obs["ph_delta"]  = obs["ph"]  - obs["ph_lag1"]
+
+    # Zero-fill LST features when no Sentinel-3 data is available
+    # The model was trained with these features; setting them to 0 means
+    # lst_weight=0 so the RF effectively ignores temperature (graceful degradation)
+    for lst_feat in ["lst_water_celsius", "lst_age_days", "lst_weight",
+                     "lst_cyano_risk", "lst_tds_interaction", "z_lst", "lst_delta"]:
+        obs.setdefault(lst_feat, 0.0)
+
+    # z_cyano alias — train.py uses z_cyanobacteria, feature list uses z_cyano
+    obs.setdefault("z_cyano", obs.get("z_cyanobacteria", 0.0))
 
     return obs
 
@@ -468,22 +487,49 @@ class AquaSenseInference:
         # Build feature vector
         obs = _build_feature_vector(sensor_reading, sat_feat, ts, hist, self.water_body)
 
+        # ── Rule-based hard overrides (sensor extremes, bypass RF) ──────────
+        # These fire when raw sensor values are unambiguously anomalous regardless
+        # of what the satellite-dominated RF scores.
+        # Remove / raise thresholds once RF is retrained on real sensor data.
+        ph  = float(sensor_reading.get("ph",  7.0))
+        tds = float(sensor_reading.get("tds", 0.0))
+        t   = THRESHOLDS
+
+        rule_score = 0.0
+        if ph < t["ph_acid"] and tds > t["acid_mine_tds"]:
+            rule_score = 0.90   # classic acid mine drainage signature
+        elif tds > t["tds_severe"]:
+            rule_score = 0.80   # TDS alone is catastrophically high
+        elif ph < 4.5:
+            rule_score = 0.75   # extreme acid even with low TDS
+        elif ph > t["ph_alkaline"] and tds > t["tds_moderate"]:
+            rule_score = 0.65   # alkaline + high TDS → industrial
+        elif ph < t["ph_acid"] or tds > t["tds_moderate"]:
+            rule_score = 0.55   # single-parameter threshold breach
+
         # ── Call train.py predict_single — the actual RF ──────────────────────
         train_result  = predict_single(self._pipeline, FEATURE_COLUMNS, obs)
-        base_score    = train_result["anomaly_score"]
+        rf_score      = train_result["anomaly_score"]
+
+        # Take the maximum of RF score and rule-based score so neither can be
+        # suppressed by the other — rules catch sensor extremes, RF catches
+        # satellite-visible events (blooms, turbidity) the sensor misses.
+        base_score    = max(rf_score, rule_score)
 
         # Confidence adjustment layer
         conf          = _compute_confidence(age, weather["rain_penalty"], base_score)
         adj_score     = conf["adjusted_anomaly_score"]
-        is_anomaly    = adj_score > 0.5
+        is_anomaly    = adj_score > 0.50   # back to 0.50 — rules handle the rest
         sev           = severity_level(adj_score)
         low_conf_warn = conf["confidence_pct"] < 65 or conf["data_mode"] == "sensor_only"
 
-        # Anomaly type — integer needed for message builder
-        anom_type_str = train_result["anomaly_type"] if is_anomaly else "normal"
-        anom_type_int = next(
-            (k for k, v in ANOMALY_TYPES.items() if v == anom_type_str), 0
-        )
+        # Anomaly type — use rule-based classifier on the obs for reliable typing
+        if is_anomaly:
+            anom_type_int = classify_anomaly_type(pd.Series(obs))
+            anom_type_str = ANOMALY_TYPES.get(anom_type_int, "normal")
+        else:
+            anom_type_int = 0
+            anom_type_str = "normal"
 
         # Explanation — suppress satellite-derived root cause when confidence low
         if not is_anomaly:
@@ -543,7 +589,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 
     engine = AquaSenseInference(
-        model_path="models/rf_anomaly_model.pkl",
+        model_path="../models/rf_anomaly_model.pkl",
         satellite_parquet="vardar_wq_results/vardar_wq_merged.parquet",
         lat=41.99, lon=21.43,
         water_body="river",
