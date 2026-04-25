@@ -1,9 +1,19 @@
+import { useState } from 'react'
+
 const SEVERITY_COLOR = {
   OK: '#3fb950',
   LOW: '#7ee787',
   MEDIUM: '#ffa726',
   HIGH: '#ff6b6b',
   CRITICAL: '#ef5350',
+}
+
+const SEVERITY_DOT = {
+  OK: 'bg-emerald-400 ring-emerald-400/30',
+  LOW: 'bg-lime-300 ring-lime-300/30',
+  MEDIUM: 'bg-amber-300 ring-amber-300/30',
+  HIGH: 'bg-orange-300 ring-orange-300/30',
+  CRITICAL: 'bg-rose-400 ring-rose-400/40',
 }
 
 function seededOffset(seed, span) {
@@ -16,7 +26,21 @@ function seededOffset(seed, span) {
 }
 
 export default function RiverMap({ sites, liveFeed, currentSeverity }) {
-  const alertPoints = liveFeed.filter((row) => row.isAnomaly).slice(-8)
+  const [hovered, setHovered] = useState(null)
+
+  const mapPoints = liveFeed.slice(-14).map((point) => ({
+    ...point,
+    left: 46 + seededOffset(`${point.id}-x`, 20),
+    top: 52 + seededOffset(`${point.id}-y`, 26),
+  }))
+
+  const tooltipLeft = hovered ? Math.min(88, Math.max(12, hovered.left)) : 50
+  const tooltipTop = hovered ? (hovered.top > 24 ? hovered.top - 4 : hovered.top + 8) : 50
+  const tooltipFromTop = hovered ? hovered.top <= 24 : false
+
+  function formatDate(iso) {
+    return new Date(iso).toLocaleString()
+  }
 
   return (
     <section className="rounded-xl border border-slate-700 bg-slate-900 p-4">
@@ -38,39 +62,118 @@ export default function RiverMap({ sites, liveFeed, currentSeverity }) {
         </svg>
 
         {sites.map((site) => (
-          <div
+          <button
             key={site.name}
-            className={`absolute grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 text-[10px] font-bold ${
+            type="button"
+            className={`absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-4 transition ${
               site.active
-                ? 'border-emerald-500 bg-emerald-900/40 text-emerald-300'
-                : 'border-slate-500 bg-slate-800 text-slate-400'
+                ? 'bg-emerald-400 ring-emerald-400/25'
+                : 'bg-slate-400 ring-slate-400/20'
             }`}
             style={{ left: `${site.x}%`, top: `${site.y}%` }}
-            title={site.name}
+            onMouseEnter={() =>
+              setHovered({
+                type: 'site',
+                left: site.x,
+                top: site.y,
+                title: site.name,
+                subtitle: site.active ? 'Online monitoring node' : 'Offline planned node',
+                details: ['Type: Sensor point', `Status: ${site.active ? 'Active' : 'Offline'}`],
+              })
+            }
+            onMouseLeave={() => setHovered(null)}
+            onFocus={() =>
+              setHovered({
+                type: 'site',
+                left: site.x,
+                top: site.y,
+                title: site.name,
+                subtitle: site.active ? 'Online monitoring node' : 'Offline planned node',
+                details: ['Type: Sensor point', `Status: ${site.active ? 'Active' : 'Offline'}`],
+              })
+            }
+            onBlur={() => setHovered(null)}
+            aria-label={site.name}
           >
-            <span>{site.active ? 'S' : 'O'}</span>
-          </div>
+            <span className="sr-only">{site.name}</span>
+          </button>
         ))}
 
-        {alertPoints.map((point) => (
-          <div
+        {mapPoints.map((point) => (
+          <button
             key={point.id}
-            className="absolute h-11 w-11 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-[0_0_0_8px_rgba(255,255,255,0.07)]"
+            type="button"
+            className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ring-8 transition ${
+              SEVERITY_DOT[point.severity] || SEVERITY_DOT.OK
+            } ${point.isAnomaly ? 'h-4 w-4 shadow-[0_0_0_2px_rgba(255,255,255,0.3)]' : 'h-3 w-3 opacity-80'}`}
             style={{
-              left: `${46 + seededOffset(`${point.id}-x`, 20)}%`,
-              top: `${52 + seededOffset(`${point.id}-y`, 26)}%`,
-              borderColor: SEVERITY_COLOR[point.severity] || '#ef5350',
+              left: `${point.left}%`,
+              top: `${point.top}%`,
             }}
-            title={point.diagnosis}
+            onMouseEnter={() =>
+              setHovered({
+                type: 'reading',
+                left: point.left,
+                top: point.top,
+                title: `${point.severity || 'OK'} reading`,
+                subtitle: point.diagnosis,
+                details: [
+                  `Time: ${formatDate(point.timestamp)}`,
+                  `Source: ${point.dataSource || 'SIMULATED'}`,
+                  `pH: ${Number(point.ardPh).toFixed(2)}`,
+                  `Conductivity: ${Number(point.ardConductivity).toFixed(0)} uS/cm`,
+                  `Turbidity: ${Number(point.satTurbidity).toFixed(1)}`,
+                ],
+              })
+            }
+            onMouseLeave={() => setHovered(null)}
+            onFocus={() =>
+              setHovered({
+                type: 'reading',
+                left: point.left,
+                top: point.top,
+                title: `${point.severity || 'OK'} reading`,
+                subtitle: point.diagnosis,
+                details: [
+                  `Time: ${formatDate(point.timestamp)}`,
+                  `Source: ${point.dataSource || 'SIMULATED'}`,
+                  `pH: ${Number(point.ardPh).toFixed(2)}`,
+                  `Conductivity: ${Number(point.ardConductivity).toFixed(0)} uS/cm`,
+                  `Turbidity: ${Number(point.satTurbidity).toFixed(1)}`,
+                ],
+              })
+            }
+            onBlur={() => setHovered(null)}
+            aria-label={`${point.severity || 'OK'} reading`}
           />
         ))}
+
+        {hovered && (
+          <div
+            className="pointer-events-none absolute z-20 w-64 -translate-x-1/2 rounded-lg border border-slate-600 bg-slate-900/95 p-3 text-xs shadow-xl"
+            style={{
+              left: `${tooltipLeft}%`,
+              top: `${tooltipTop}%`,
+              transform: tooltipFromTop ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
+            }}
+          >
+            <p className="font-semibold text-slate-100">{hovered.title}</p>
+            <p className="mt-1 text-slate-300">{hovered.subtitle}</p>
+            <ul className="mt-2 space-y-1 text-slate-400">
+              {hovered.details.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
-      <div className="mt-2 text-sm text-slate-400">
+      <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-400">
         <span>
           Current status:{' '}
           <strong style={{ color: SEVERITY_COLOR[currentSeverity] || '#3fb950' }}>{currentSeverity}</strong>
         </span>
+        <span className="text-xs">Hover a dot to inspect site or reading data.</span>
       </div>
     </section>
   )
