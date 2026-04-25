@@ -32,6 +32,7 @@ function App() {
         onClear={clearLiveFeed}
         liveCount={liveFeed.length}
         alertCount={liveAlerts.length}
+        current={current}
       />
 
       <main className="hidden min-h-screen border-l border-slate-800/80 bg-slate-950 p-4 lg:block">
