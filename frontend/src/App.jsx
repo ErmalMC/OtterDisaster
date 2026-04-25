@@ -16,6 +16,8 @@ function App() {
     clearLiveFeed,
   } = useWaterGuard()
   const [mapMessage, setMapMessage] = useState(null)
+  const selectedReading = mapMessage?.kind === 'reading' ? mapMessage.raw : null
+  const sidebarCurrent = selectedReading || current
 
   function handleInject(params) {
     injectReading(params)
@@ -32,7 +34,7 @@ function App() {
         onClear={clearLiveFeed}
         liveCount={liveFeed.length}
         alertCount={liveAlerts.length}
-        current={current}
+        current={sidebarCurrent}
       />
 
       <main className="hidden min-h-screen border-l border-slate-800/80 bg-slate-950 p-4 lg:block">
@@ -43,6 +45,11 @@ function App() {
               <div>
                 <p className="font-semibold text-slate-100">{mapMessage.title}</p>
                 <p className="mt-1 text-slate-300">{mapMessage.subtitle}</p>
+                {mapMessage.kind === 'reading' && Number(mapMessage.raw?.ardPh) < 6.5 && (
+                  <p className="mt-2 rounded border border-rose-700 bg-rose-950/40 px-2 py-1 text-rose-300">
+                    The water is toxic.
+                  </p>
+                )}
                 <ul className="mt-2 space-y-1 text-xs text-slate-400">
                   {mapMessage.details.map((line) => (
                     <li key={line}>{line}</li>

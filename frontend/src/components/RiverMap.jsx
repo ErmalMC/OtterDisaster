@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CircleMarker, MapContainer, Polyline, TileLayer, useMapEvents } from 'react-leaflet'
 
 const SEVERITY_COLOR = {
   OK: '#3fb950',
@@ -8,13 +9,25 @@ const SEVERITY_COLOR = {
   CRITICAL: '#ef5350',
 }
 
-const SEVERITY_DOT = {
-  OK: 'bg-emerald-400 ring-emerald-400/30',
-  LOW: 'bg-lime-300 ring-lime-300/30',
-  MEDIUM: 'bg-amber-300 ring-amber-300/30',
-  HIGH: 'bg-orange-300 ring-orange-300/30',
-  CRITICAL: 'bg-rose-400 ring-rose-400/40',
+const MAP_CENTER = [42.0014, 21.4343]
+const MAP_BOUNDS = {
+  north: 42.013,
+  south: 41.992,
+  west: 21.383,
+  east: 21.486,
 }
+
+const VARDAR_PATH = [
+  [42.01, 21.385],
+  [42.008, 21.398],
+  [42.006, 21.41],
+  [42.004, 21.422],
+  [42.002, 21.433],
+  [42.001, 21.443],
+  [41.999, 21.455],
+  [41.997, 21.468],
+  [41.996, 21.48],
+]
 
 function seededOffset(seed, span) {
   let hash = 0
@@ -25,13 +38,33 @@ function seededOffset(seed, span) {
   return (normalized - 0.5) * span
 }
 
+function toSiteLatLng(site) {
+  if (typeof site.lat === 'number' && typeof site.lon === 'number') {
+    return [site.lat, site.lon]
+  }
+  const x = Number(site.x || 50) / 100
+  const y = Number(site.y || 50) / 100
+  const lat = MAP_BOUNDS.north - y * (MAP_BOUNDS.north - MAP_BOUNDS.south)
+  const lon = MAP_BOUNDS.west + x * (MAP_BOUNDS.east - MAP_BOUNDS.west)
+  return [lat, lon]
+}
+
+function MapClearSelection({ onClear }) {
+  useMapEvents({
+    click() {
+      onClear()
+    },
+  })
+  return null
+}
+
 export default function RiverMap({ sites, liveFeed, currentSeverity, onPointSelect }) {
   const [selected, setSelected] = useState(null)
 
   const mapPoints = liveFeed.slice(-14).map((point) => ({
     ...point,
-    left: 46 + seededOffset(`${point.id}-x`, 20),
-    top: 52 + seededOffset(`${point.id}-y`, 26),
+    lat: MAP_CENTER[0] + seededOffset(`${point.id}-lat`, 0.006),
+    lon: MAP_CENTER[1] + seededOffset(`${point.id}-lon`, 0.01),
   }))
 
   function formatDate(iso) {
@@ -73,76 +106,80 @@ export default function RiverMap({ sites, liveFeed, currentSeverity, onPointSele
         <p className="text-sm text-slate-400">Sensor coverage and anomaly hotspots</p>
       </div>
 
-      <div className="relative mt-3 min-h-[280px] overflow-hidden rounded-xl border border-slate-700 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900">
-        <button
-          type="button"
-          aria-label="Clear selected map point"
-          className="absolute inset-0 z-0"
-          onClick={() => {
-            setSelected(null)
-            if (typeof onPointSelect === 'function') {
-              onPointSelect(null)
-            }
-          }}
-        />
-        <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden="true">
-          <path
-            d="M2,22 C18,25 28,34 42,38 C57,43 64,59 82,65 C90,67 97,76 99,88"
-            fill="none"
-            stroke="#4fc3f7"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+      <div className="mt-3 overflow-hidden rounded-xl border border-slate-700">
+        <MapContainer center={MAP_CENTER} zoom={13} className="h-[360px] w-full" scrollWheelZoom>
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-        </svg>
-
-        {sites.map((site) => (
-          <button
-            key={site.name}
-            type="button"
-            className={`absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-4 transition cursor-pointer ${
-              site.active
-                ? 'bg-emerald-400 ring-emerald-400/25'
-                : 'bg-slate-400 ring-slate-400/20'
-            }`}
-            onClick={() => {
-              const isSame = selected?.kind === 'site' && selected?.id === site.name
-              const payload = isSame ? null : buildSitePayload(site)
-              setSelected(payload)
+          <MapClearSelection
+            onClear={() => {
+              setSelected(null)
               if (typeof onPointSelect === 'function') {
-                onPointSelect(payload)
+                onPointSelect(null)
               }
             }}
-            aria-label={site.name}
-            style={{ left: `${site.x}%`, top: `${site.y}%`, zIndex: 10 }}
-          >
-            <span className="sr-only">{site.name}</span>
-          </button>
-        ))}
-
-        {mapPoints.map((point) => (
-          <button
-            key={point.id}
-            type="button"
-            className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ring-8 transition ${
-              SEVERITY_DOT[point.severity] || SEVERITY_DOT.OK
-            } ${point.isAnomaly ? 'h-4 w-4 shadow-[0_0_0_2px_rgba(255,255,255,0.3)]' : 'h-3 w-3 opacity-80'}`}
-            style={{
-              left: `${point.left}%`,
-              top: `${point.top}%`,
-              zIndex: 10,
-            }}
-            onClick={() => {
-              const isSame = selected?.kind === 'reading' && selected?.id === point.id
-              const payload = isSame ? null : buildReadingPayload(point)
-              setSelected(payload)
-              if (typeof onPointSelect === 'function') {
-                onPointSelect(payload)
-              }
-            }}
-            aria-label={`${point.severity || 'OK'} reading`}
           />
-        ))}
+
+          <Polyline positions={VARDAR_PATH} pathOptions={{ color: '#4fc3f7', weight: 4, opacity: 0.75 }} />
+
+          {sites.map((site) => {
+            const [lat, lon] = toSiteLatLng(site)
+            const isSelected = selected?.kind === 'site' && selected?.id === site.name
+            return (
+              <CircleMarker
+                key={site.name}
+                center={[lat, lon]}
+                radius={isSelected ? 9 : 7}
+                bubblingMouseEvents={false}
+                eventHandlers={{
+                  click: () => {
+                    const isSame = selected?.kind === 'site' && selected?.id === site.name
+                    const payload = isSame ? null : buildSitePayload(site)
+                    setSelected(payload)
+                    if (typeof onPointSelect === 'function') {
+                      onPointSelect(payload)
+                    }
+                  },
+                }}
+                pathOptions={{
+                  color: site.active ? '#10b981' : '#94a3b8',
+                  fillColor: site.active ? '#34d399' : '#94a3b8',
+                  fillOpacity: 0.9,
+                  weight: 2,
+                }}
+              />
+            )
+          })}
+
+          {mapPoints.map((point) => {
+            const isSelected = selected?.kind === 'reading' && selected?.id === point.id
+            return (
+              <CircleMarker
+                key={point.id}
+                center={[point.lat, point.lon]}
+                radius={isSelected ? 8 : point.isAnomaly ? 7 : 5}
+                bubblingMouseEvents={false}
+                eventHandlers={{
+                  click: () => {
+                    const isSame = selected?.kind === 'reading' && selected?.id === point.id
+                    const payload = isSame ? null : buildReadingPayload(point)
+                    setSelected(payload)
+                    if (typeof onPointSelect === 'function') {
+                      onPointSelect(payload)
+                    }
+                  },
+                }}
+                pathOptions={{
+                  color: SEVERITY_COLOR[point.severity] || SEVERITY_COLOR.OK,
+                  fillColor: SEVERITY_COLOR[point.severity] || SEVERITY_COLOR.OK,
+                  fillOpacity: point.isAnomaly ? 0.95 : 0.75,
+                  weight: 2,
+                }}
+              />
+            )
+          })}
+        </MapContainer>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-400">
