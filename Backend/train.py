@@ -186,7 +186,7 @@ def merge_satellite_sensor(sat_df: pd.DataFrame, sensor_df: pd.DataFrame) -> pd.
         sat_df,
         sensor_df[["timestamp", "tds", "ph"]],
         on="timestamp",
-        tolerance=pd.Timedelta("7D"),  # widened to match weekly satellite cadence
+        tolerance=pd.Timedelta("14D"),  # widened from 7D — fixes ~50% sensor match rate
         direction="nearest"
     )
 
@@ -231,13 +231,21 @@ def add_rolling_zscores(df: pd.DataFrame) -> pd.DataFrame:
     window = THRESHOLDS["zscore_rolling_window"]
     z_features = ["ndti", "ndci", "chl_a", "cyanobacteria", "tds", "ph"]
 
+    # z_cyano fix: cyanobacteria is stored as log1p — un-log before z-scoring
+    # so the rolling window operates in real units, not log space.
+    # Without this, z_cyano is always near zero and the feature is useless.
+    cyano_real = None
+    if "cyanobacteria" in df.columns:
+        cyano_real = np.expm1(df["cyanobacteria"].clip(lower=0))
+
     for feat in z_features:
         if feat not in df.columns:
             continue
-        roll = df[feat].rolling(window=window, min_periods=5)
+        series = cyano_real if feat == "cyanobacteria" else df[feat]
+        roll = series.rolling(window=window, min_periods=5)
         roll_mean = roll.mean()
         roll_std = roll.std().replace(0, np.nan)
-        df[f"z_{feat}"] = (df[feat] - roll_mean) / roll_std
+        df[f"z_{feat}"] = (series - roll_mean) / roll_std
 
     # Count of features simultaneously anomalous — very powerful signal
     z_cols = [f"z_{f}" for f in z_features if f"z_{f}" in df.columns]
