@@ -211,7 +211,7 @@ class SensorBridge:
         proba = float(self.pipeline.predict_proba(X)[0, 1])
         is_anomaly = proba > 0.5
 
-        from Backend.data.train import classify_anomaly_type, build_explanation, severity_level, ANOMALY_TYPES
+        from backend.data.train import classify_anomaly_type, build_explanation, severity_level, ANOMALY_TYPES
         obs_series = pd.Series(observation)
         anomaly_type_id = classify_anomaly_type(obs_series) if is_anomaly else 0
         anomaly_type = ANOMALY_TYPES[anomaly_type_id]
