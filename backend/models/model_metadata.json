@@ -10,21 +10,29 @@
     "doc",
     "tds",
     "ph",
+    "lst_water_celsius",
+    "lst_age_days",
+    "lst_weight",
     "sin_month",
     "cos_month",
     "tds_ph_interaction",
     "ndci_chl_product",
+    "lst_cyano_risk",
+    "lst_tds_interaction",
     "z_ndti",
     "z_ndci",
     "z_chl_a",
+    "z_cyano",
     "z_tds",
     "z_ph",
+    "z_lst",
     "multi_feature_z_count",
     "tds_lag1",
     "ph_lag1",
     "ndti_lag1",
     "tds_delta",
-    "ph_delta"
+    "ph_delta",
+    "lst_delta"
   ],
   "thresholds": {
     "ndwi_min": 0.1,
@@ -43,7 +51,10 @@
     "zscore_anomaly": 2.5,
     "zscore_rolling_window": 30,
     "acid_mine_tds": 800.0,
-    "acid_mine_ph": 6.5
+    "acid_mine_ph": 6.5,
+    "lst_bloom_risk_celsius": 20.0,
+    "lst_cold_anomaly_celsius": 8.0,
+    "lst_hot_anomaly_celsius": 30.0
   },
   "anomaly_types": {
     "0": "normal",
@@ -54,9 +65,11 @@
     "5": "organic_pollution",
     "6": "acid_mine_drainage"
   },
-  "cv_roc_auc": 0.9807272727272727,
-  "cv_avg_precision": 0.9730338912424473,
-  "n_train": 153,
-  "n_anomalies": 52,
-  "anomaly_rate": 0.33986928104575165
+  "lst_decay_days": 7.0,
+  "lst_enabled": false,
+  "cv_roc_auc": 0.9991439173945198,
+  "cv_avg_precision": 0.9968742006595411,
+  "n_train": 1576,
+  "n_anomalies": 327,
+  "anomaly_rate": 0.20748730964467005
 }

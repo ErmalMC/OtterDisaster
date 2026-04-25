@@ -1,10 +1,15 @@
 import serial
 import os
+import argparse
 
-ino_folder = r"C:\Users\Ole\OneDrive\Documents\Arduino\cassini26_ph_tds_code" # path do foldero so ino kodo
-output_file = os.path.join(ino_folder, "output.csv")
+parser = argparse.ArgumentParser()
+parser.add_argument("--port", default="/dev/ttyUSB0")
+parser.add_argument("--output", default=None)
+args = parser.parse_args()
 
-with serial.Serial("COM3", 9600) as ser, open(output_file, "w") as f:  # tuka se stava porto so e povrzan so arduinoto
+output_file = args.output or os.path.join(os.path.dirname(__file__), "output.csv")
+
+with serial.Serial(args.port, 9600) as ser, open(output_file, "w") as f:
     print(f"Saving to {output_file}")
     while True:
         line = ser.readline().decode().strip()

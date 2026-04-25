@@ -95,6 +95,7 @@ ANOMALY_TYPES = {
     4: "industrial_discharge",
     5: "organic_pollution",
     6: "acid_mine_drainage",
+    7: "pure_water_anomaly",  # distilled water / extreme dilution / sensor disconnect
 }
 
 # ── LST staleness decay constant ─────────────────────────────────────────────
@@ -460,6 +461,14 @@ def rule_based_labels(df: pd.DataFrame) -> pd.Series:
 def classify_anomaly_type(row: pd.Series) -> int:
     t = THRESHOLDS
 
+    # ── Pure water / distilled water anomaly ─────────────────────────────────
+    # Check this FIRST: unnaturally low TDS is a distinct signature that doesn't
+    # fit any other category. Catches distilled water, extreme rainwater dilution,
+    # or sensor disconnect. tds_too_low defaults to 50 ppm if not in THRESHOLDS.
+    tds_val = row.get("tds", 350.0)
+    if tds_val < t.get("tds_too_low", 50.0):
+        return 7  # pure_water_anomaly
+
     if row.get("cyanobacteria", 0) > t["cyano_alert"]:
         return 3  # toxic cyanobacteria
 
@@ -634,6 +643,18 @@ def severity_level(score: float) -> str:
 def build_explanation(obs: pd.Series, anomaly_type: int, score: float) -> str:
     type_name = ANOMALY_TYPES[anomaly_type]
     parts = [f"Anomaly detected ({type_name}, confidence {score:.0%})."]
+
+    # ── Pure water / distilled water anomaly ─────────────────────────────────
+    # Must be checked before the high-TDS / pH blocks since tds will be near 0.
+    tds_val = obs.get("tds", 350.0)
+    if tds_val < THRESHOLDS.get("tds_too_low", 50.0):
+        parts.append(
+            f"Extremely low TDS ({tds_val:.1f} ppm) — well below the natural minimum "
+            f"of {THRESHOLDS.get('tds_too_low', 50.0):.0f} ppm for this water body. "
+            "This matches distilled water, ultra-pure rainwater dilution, or a possible "
+            "sensor disconnection. Verify probe contact and check for upstream dilution events."
+        )
+        return " ".join(parts)  # Early return — no other checks make sense at this TDS
 
     if obs.get("cyanobacteria", 0) > THRESHOLDS["cyano_alert"]:
         parts.append(f"Cyanobacteria at {obs['cyanobacteria']:.0f}k cells/ml. Potential health hazard.")

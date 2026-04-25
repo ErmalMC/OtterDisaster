@@ -67,6 +67,7 @@ WATER_BODY_THRESHOLDS = {
         "tds_moderate": 800.0,
         "tds_severe": 2000.0,
         "ph_acid": 6.0,
+"tds_too_low": 50.0,
         "ph_alkaline": 9.0,
         "ndti_high": 0.25,
         "ndci_bloom": 0.20,
@@ -75,6 +76,7 @@ WATER_BODY_THRESHOLDS = {
     "lake": {
         "tds_moderate": 600.0,
         "tds_severe": 1500.0,
+        "tds_too_low": 30.0,
         "ph_acid": 6.5,
         "ph_alkaline": 8.5,
         "ndti_high": 0.18,
@@ -84,6 +86,7 @@ WATER_BODY_THRESHOLDS = {
     "spring": {
         "tds_moderate": 300.0,
         "tds_severe": 800.0,
+        "tds_too_low": 20.0,
         "ph_acid": 6.8,
         "ph_alkaline": 8.0,
         "ndti_high": 0.10,
@@ -316,12 +319,21 @@ def _build_message(
 
         tds = sensor.get("tds", 0)
         ph  = sensor.get("ph", 7)
-        if tds > wbt["tds_moderate"]:
-            lines.append(f"TDS at {tds:.0f} ppm (threshold for {water_body}: {wbt['tds_moderate']:.0f} ppm).")
-        if ph < wbt["ph_acid"]:
-            lines.append(f"pH at {ph:.1f} — acidic for a {water_body} (limit: {wbt['ph_acid']}).")
-        if ph > wbt["ph_alkaline"]:
-            lines.append(f"pH at {ph:.1f} — alkaline for a {water_body} (limit: {wbt['ph_alkaline']}).")
+
+        # ── Pure water anomaly message ────────────────────────────────────────
+        if anomaly_type_int == 7:
+            lines.append(
+                f"TDS is only {tds:.1f} ppm — far below the natural minimum "
+                f"({wbt.get('tds_too_low', 50.0):.0f} ppm) for a {water_body}. "
+                "Check sensor probe contact and look for extreme upstream dilution."
+            )
+        else:
+            if tds > wbt["tds_moderate"]:
+                lines.append(f"TDS at {tds:.0f} ppm (threshold for {water_body}: {wbt['tds_moderate']:.0f} ppm).")
+            if ph < wbt["ph_acid"]:
+                lines.append(f"pH at {ph:.1f} — acidic for a {water_body} (limit: {wbt['ph_acid']}).")
+            if ph > wbt["ph_alkaline"]:
+                lines.append(f"pH at {ph:.1f} — alkaline for a {water_body} (limit: {wbt['ph_alkaline']}).")
 
     if conf["data_mode"] == "sensor_only":
         lines.append(
@@ -381,7 +393,15 @@ class AquaSenseInference:
         self._sat_path = Path(satellite_parquet)
         self._load_satellite()
 
-        self._history: list[dict] = []   # rolling buffer, max 60
+        self._history: list[dict] = []
+        base_tds = 350.0 if self.water_body == "river" else 150.0
+        base_ph = 7.4
+        for _ in range(15):
+            self._history.append({
+                "tds": base_tds,
+                "ph": base_ph,
+                "timestamp": datetime.now()
+            })  # rolling buffer, max 60
 
     def _load_satellite(self):
         if not self._sat_path.exists():
@@ -425,12 +445,20 @@ class AquaSenseInference:
         except Exception:
             # Fallback: raw lines "timestamp,ph,tds_ppm"
             lines = csv_path.read_text().strip().splitlines()
-            parts = lines[-1].split(",")
-            return {
-                "timestamp": pd.to_datetime(parts[0]).to_pydatetime(),
-                "ph":        float(parts[1]),
-                "tds":       float(parts[2]),
-            }
+            for line in reversed(lines):
+                parts = line.split(",")
+                if len(parts) >= 3:
+                    try:
+                        return {
+                            "timestamp": pd.to_datetime(parts[0]).to_pydatetime(),
+                            "ph": float(parts[1]),
+                            "tds": float(parts[2]),
+                        }
+                    except (ValueError, TypeError):
+                        continue  # If floats are empty or corrupted, try the line above it
+
+            # If the file is completely empty or corrupted, return a safe fallback
+            return {"tds": 0.0, "ph": 7.0, "timestamp": datetime.now()}
 
     def predict_from_arduino(self, csv_path: str | Path) -> dict:
         """
@@ -496,16 +524,18 @@ class AquaSenseInference:
         t   = THRESHOLDS
 
         rule_score = 0.0
-        if ph < t["ph_acid"] and tds > t["acid_mine_tds"]:
-            rule_score = 0.90   # classic acid mine drainage signature
+        if ph < t["ph_acid"] and tds > t.get("acid_mine_tds", 800):
+            rule_score = 0.90  # classic acid mine drainage signature
         elif tds > t["tds_severe"]:
-            rule_score = 0.80   # TDS alone is catastrophically high
+            rule_score = 0.80  # TDS alone is catastrophically high
+        elif tds < t.get("tds_too_low", 50.0):
+            rule_score = 0.85  # <-- NEW: Unnaturally low TDS (Distilled/pure water anomaly)
         elif ph < 4.5:
-            rule_score = 0.75   # extreme acid even with low TDS
+            rule_score = 0.75  # extreme acid even with low TDS
         elif ph > t["ph_alkaline"] and tds > t["tds_moderate"]:
-            rule_score = 0.65   # alkaline + high TDS → industrial
+            rule_score = 0.65  # alkaline + high TDS → industrial
         elif ph < t["ph_acid"] or tds > t["tds_moderate"]:
-            rule_score = 0.55   # single-parameter threshold breach
+            rule_score = 0.55# single-parameter threshold breach
 
         # ── Call train.py predict_single — the actual RF ──────────────────────
         train_result  = predict_single(self._pipeline, FEATURE_COLUMNS, obs)
@@ -531,10 +561,19 @@ class AquaSenseInference:
             anom_type_int = 0
             anom_type_str = "normal"
 
-        # Explanation — suppress satellite-derived root cause when confidence low
+        # Explanation — suppress satellite-derived root cause when confidence low,
+        # BUT always explain sensor-driven anomalies (low TDS, extreme pH) directly
+        # since those don't depend on satellite freshness at all.
+        sensor_driven_anomaly = (
+            tds < t.get("tds_too_low", 50.0) or
+            tds > t["tds_severe"] or
+            ph < 4.5 or
+            (ph < t["ph_acid"] and tds > t.get("acid_mine_tds", 800))
+        )
+
         if not is_anomaly:
             explanation = f"All parameters within normal range for a {self.water_body}."
-        elif low_conf_warn:
+        elif low_conf_warn and not sensor_driven_anomaly:
             explanation = (
                 f"Anomaly detected (confidence {conf['confidence_pct']}%). "
                 "Root cause withheld — satellite data is stale or heavy rainfall "
