@@ -63,13 +63,14 @@
     "3": "toxic_cyanobacteria",
     "4": "industrial_discharge",
     "5": "organic_pollution",
-    "6": "acid_mine_drainage"
+    "6": "acid_mine_drainage",
+    "7": "pure_water_anomaly"
   },
   "lst_decay_days": 7.0,
-  "lst_enabled": true,
-  "cv_roc_auc": 0.9982149986866299,
-  "cv_avg_precision": 0.9942747368599131,
+  "lst_enabled": false,
+  "cv_roc_auc": 0.9987518783759748,
+  "cv_avg_precision": 0.9950515004971653,
   "n_train": 1576,
-  "n_anomalies": 401,
-  "anomaly_rate": 0.25444162436548223
+  "n_anomalies": 328,
+  "anomaly_rate": 0.20812182741116753
 }
