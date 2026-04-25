@@ -24,7 +24,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 lg:grid lg:grid-cols-[320px_1fr]">
+    <div className="min-h-screen bg-slate-50 text-slate-900 lg:grid lg:grid-cols-[320px_1fr]">
       <SidebarControls
         satellite={satellite.data}
         satStatus={satellite.status}
@@ -37,20 +37,20 @@ function App() {
         current={sidebarCurrent}
       />
 
-      <main className="hidden min-h-screen border-l border-slate-800/80 bg-slate-950 p-4 lg:block">
-        <section className="mb-4 rounded-xl border border-slate-700 bg-slate-900 p-4">
-          <p className="text-xs uppercase tracking-wider text-slate-400">Message Area</p>
-          <div className="mt-2 min-h-16 rounded-lg border border-dashed border-slate-700 bg-slate-950/70 p-3 text-sm text-slate-400">
+      <main className="hidden min-h-screen border-l border-slate-200 bg-slate-50 p-4 lg:block">
+        <section className="mb-4 px-1 py-2">
+          <p className="text-xs uppercase tracking-wider text-slate-500">Message Area</p>
+          <div className="mt-2 min-h-16 text-sm text-slate-700">
             {mapMessage ? (
               <div>
-                <p className="font-semibold text-slate-100">{mapMessage.title}</p>
-                <p className="mt-1 text-slate-300">{mapMessage.subtitle}</p>
+                <p className="font-semibold text-slate-900">{mapMessage.title}</p>
+                <p className="mt-1 text-slate-700">{mapMessage.subtitle}</p>
                 {mapMessage.kind === 'reading' && Number(mapMessage.raw?.ardPh) < 6.5 && (
-                  <p className="mt-2 rounded border border-rose-700 bg-rose-950/40 px-2 py-1 text-rose-300">
+                  <p className="mt-2 rounded border border-rose-300 bg-rose-50 px-2 py-1 text-rose-700">
                     The water is toxic.
                   </p>
                 )}
-                <ul className="mt-2 space-y-1 text-xs text-slate-400">
+                <ul className="mt-2 space-y-1 text-xs text-slate-600">
                   {mapMessage.details.map((line) => (
                     <li key={line}>{line}</li>
                   ))}

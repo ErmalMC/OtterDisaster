@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CircleMarker, MapContainer, Polyline, TileLayer, useMapEvents } from 'react-leaflet'
+import { CircleMarker, MapContainer, TileLayer, useMapEvents } from 'react-leaflet'
 
 const SEVERITY_COLOR = {
   OK: '#3fb950',
@@ -16,18 +16,6 @@ const MAP_BOUNDS = {
   west: 21.383,
   east: 21.486,
 }
-
-const VARDAR_PATH = [
-  [42.01, 21.385],
-  [42.008, 21.398],
-  [42.006, 21.41],
-  [42.004, 21.422],
-  [42.002, 21.433],
-  [42.001, 21.443],
-  [41.999, 21.455],
-  [41.997, 21.468],
-  [41.996, 21.48],
-]
 
 function seededOffset(seed, span) {
   let hash = 0
@@ -58,7 +46,7 @@ function MapClearSelection({ onClear }) {
   return null
 }
 
-export default function RiverMap({ sites, liveFeed, currentSeverity, onPointSelect }) {
+export default function RiverMap({ sites, liveFeed, onPointSelect }) {
   const [selected, setSelected] = useState(null)
 
   const mapPoints = liveFeed.slice(-14).map((point) => ({
@@ -100,96 +88,77 @@ export default function RiverMap({ sites, liveFeed, currentSeverity, onPointSele
   }
 
   return (
-    <section className="rounded-xl border border-slate-700 bg-slate-900 p-4">
-      <div>
-        <h2 className="text-base font-semibold">Vardar River Map</h2>
-        <p className="text-sm text-slate-400">Sensor coverage and anomaly hotspots</p>
-      </div>
+    <MapContainer center={MAP_CENTER} zoom={13} className="h-[500px] w-full" scrollWheelZoom>
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+      <MapClearSelection
+        onClear={() => {
+          setSelected(null)
+          if (typeof onPointSelect === 'function') {
+            onPointSelect(null)
+          }
+        }}
+      />
 
-      <div className="mt-3 overflow-hidden rounded-xl border border-slate-700">
-        <MapContainer center={MAP_CENTER} zoom={13} className="h-[360px] w-full" scrollWheelZoom>
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <MapClearSelection
-            onClear={() => {
-              setSelected(null)
-              if (typeof onPointSelect === 'function') {
-                onPointSelect(null)
-              }
+      {sites.map((site) => {
+        const [lat, lon] = toSiteLatLng(site)
+        const isSelected = selected?.kind === 'site' && selected?.id === site.name
+        return (
+          <CircleMarker
+            key={site.name}
+            center={[lat, lon]}
+            radius={isSelected ? 9 : 7}
+            bubblingMouseEvents={false}
+            eventHandlers={{
+              click: () => {
+                const isSame = selected?.kind === 'site' && selected?.id === site.name
+                const payload = isSame ? null : buildSitePayload(site)
+                setSelected(payload)
+                if (typeof onPointSelect === 'function') {
+                  onPointSelect(payload)
+                }
+              },
+            }}
+            pathOptions={{
+              color: site.active ? '#10b981' : '#94a3b8',
+              fillColor: site.active ? '#34d399' : '#94a3b8',
+              fillOpacity: 0.9,
+              weight: 2,
             }}
           />
+        )
+      })}
 
-          <Polyline positions={VARDAR_PATH} pathOptions={{ color: '#4fc3f7', weight: 4, opacity: 0.75 }} />
-
-          {sites.map((site) => {
-            const [lat, lon] = toSiteLatLng(site)
-            const isSelected = selected?.kind === 'site' && selected?.id === site.name
-            return (
-              <CircleMarker
-                key={site.name}
-                center={[lat, lon]}
-                radius={isSelected ? 9 : 7}
-                bubblingMouseEvents={false}
-                eventHandlers={{
-                  click: () => {
-                    const isSame = selected?.kind === 'site' && selected?.id === site.name
-                    const payload = isSame ? null : buildSitePayload(site)
-                    setSelected(payload)
-                    if (typeof onPointSelect === 'function') {
-                      onPointSelect(payload)
-                    }
-                  },
-                }}
-                pathOptions={{
-                  color: site.active ? '#10b981' : '#94a3b8',
-                  fillColor: site.active ? '#34d399' : '#94a3b8',
-                  fillOpacity: 0.9,
-                  weight: 2,
-                }}
-              />
-            )
-          })}
-
-          {mapPoints.map((point) => {
-            const isSelected = selected?.kind === 'reading' && selected?.id === point.id
-            return (
-              <CircleMarker
-                key={point.id}
-                center={[point.lat, point.lon]}
-                radius={isSelected ? 8 : point.isAnomaly ? 7 : 5}
-                bubblingMouseEvents={false}
-                eventHandlers={{
-                  click: () => {
-                    const isSame = selected?.kind === 'reading' && selected?.id === point.id
-                    const payload = isSame ? null : buildReadingPayload(point)
-                    setSelected(payload)
-                    if (typeof onPointSelect === 'function') {
-                      onPointSelect(payload)
-                    }
-                  },
-                }}
-                pathOptions={{
-                  color: SEVERITY_COLOR[point.severity] || SEVERITY_COLOR.OK,
-                  fillColor: SEVERITY_COLOR[point.severity] || SEVERITY_COLOR.OK,
-                  fillOpacity: point.isAnomaly ? 0.95 : 0.75,
-                  weight: 2,
-                }}
-              />
-            )
-          })}
-        </MapContainer>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-400">
-        <span>
-          Current status:{' '}
-          <strong style={{ color: SEVERITY_COLOR[currentSeverity] || '#3fb950' }}>{currentSeverity}</strong>
-        </span>
-        <span className="text-xs">Click a dot to send its data to the top message area.</span>
-      </div>
-    </section>
+      {mapPoints.map((point) => {
+        const isSelected = selected?.kind === 'reading' && selected?.id === point.id
+        return (
+          <CircleMarker
+            key={point.id}
+            center={[point.lat, point.lon]}
+            radius={isSelected ? 8 : point.isAnomaly ? 7 : 5}
+            bubblingMouseEvents={false}
+            eventHandlers={{
+              click: () => {
+                const isSame = selected?.kind === 'reading' && selected?.id === point.id
+                const payload = isSame ? null : buildReadingPayload(point)
+                setSelected(payload)
+                if (typeof onPointSelect === 'function') {
+                  onPointSelect(payload)
+                }
+              },
+            }}
+            pathOptions={{
+              color: SEVERITY_COLOR[point.severity] || SEVERITY_COLOR.OK,
+              fillColor: SEVERITY_COLOR[point.severity] || SEVERITY_COLOR.OK,
+              fillOpacity: point.isAnomaly ? 0.95 : 0.75,
+              weight: 2,
+            }}
+          />
+        )
+      })}
+    </MapContainer>
   )
 }
 

@@ -1,17 +1,17 @@
 
 
 function getColor(kind, value) {
-  if (kind === 'ph') return value > 6.5 && value < 8 ? 'text-emerald-400' : value > 5.5 ? 'text-amber-400' : 'text-rose-400'
-  if (kind === 'cond') return value < 500 ? 'text-emerald-400' : value < 800 ? 'text-amber-400' : 'text-rose-400'
-  if (kind === 'turb') return value < 8 ? 'text-emerald-400' : value < 15 ? 'text-amber-400' : 'text-rose-400'
-  if (kind === 'ndwi') return value > 0.2 ? 'text-emerald-400' : 'text-amber-400'
-  return 'text-emerald-400'
+  if (kind === 'ph') return value > 6.5 && value < 8 ? 'text-emerald-600' : value > 5.5 ? 'text-amber-600' : 'text-rose-600'
+  if (kind === 'cond') return value < 500 ? 'text-emerald-600' : value < 800 ? 'text-amber-600' : 'text-rose-600'
+  if (kind === 'turb') return value < 8 ? 'text-emerald-600' : value < 15 ? 'text-amber-600' : 'text-rose-600'
+  if (kind === 'ndwi') return value > 0.2 ? 'text-emerald-600' : 'text-amber-600'
+  return 'text-emerald-600'
 }
 
 function Card({ label, value, unit, detail, tone }) {
   return (
-      <article className="rounded-xl border border-slate-700 bg-slate-900 p-4">
-        <p className="text-xs uppercase tracking-wider text-slate-400">{label}</p>
+      <article className="px-1 py-2">
+        <p className="text-[11px] uppercase tracking-wider text-slate-500">{label}</p>
         <h3 className={`mt-1 text-3xl font-bold ${tone}`}>{value}</h3>
         <small className="text-xs text-slate-500">{unit}</small>
         <p className={`mt-1 text-sm font-medium ${tone}`}>{detail}</p>
@@ -84,13 +84,13 @@ export default function SidebarControls({current}){
   // }
 
   return (
-    <aside className="space-y-4 border-b border-slate-700 bg-slate-900 p-4 lg:min-h-screen lg:border-b-0 lg:border-r">
+    <aside className="space-y-4 border-b border-slate-200 bg-white p-4 lg:min-h-screen lg:border-b-0 lg:border-r">
       <div>
-        <p className="inline-flex rounded border border-sky-500 px-2 py-1 text-xs font-semibold text-sky-300">SAT</p>
-        <h1 className="mt-2 text-xl font-semibold">OtterDisaster</h1>
-        <p className="text-sm text-slate-400">Water Monitor</p>
+        <p className="inline-flex rounded border border-sky-300 bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-700">SAT</p>
+        <h1 className="mt-2 text-xl font-semibold text-slate-900">OtterDisaster</h1>
+        <p className="text-sm text-slate-600">Water Monitor</p>
       </div>
-      <section className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         <Card
             label="pH"
             value={ph.toFixed(2)}
