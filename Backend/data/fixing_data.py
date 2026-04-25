@@ -21,13 +21,12 @@ for nc_path in nc_paths:
     for i, ts in enumerate(timestamps):
         print(f"  {ts} ...", flush=True)
 
-        # Data is already in surface reflectance — do NOT rescale
+        # Load only bands confirmed to have valid data (B06, B08 are all-NaN in downloads)
         B01 = ds["B01"].isel(t=i).values
         B02 = ds["B02"].isel(t=i).values
         B03 = ds["B03"].isel(t=i).values
         B04 = ds["B04"].isel(t=i).values
-        B05 = ds["B05"].isel(t=i).values
-        B08 = ds["B08"].isel(t=i).values  # needed for NDWI
+        B05 = ds["B05"].isel(t=i).values  # used as NIR proxy for NDWI
 
         # Clip to valid reflectance range [0, 1]
         B01 = np.clip(B01, 0, 1)
@@ -35,21 +34,22 @@ for nc_path in nc_paths:
         B03 = np.clip(B03, 0, 1)
         B04 = np.clip(B04, 0, 1)
         B05 = np.clip(B05, 0, 1)
-        B08 = np.clip(B08, 0, 1)
 
         # Replace zeros with nan to avoid division by zero
         B01 = np.where(B01 == 0, np.nan, B01)
         B02 = np.where(B02 == 0, np.nan, B02)
         B04 = np.where(B04 == 0, np.nan, B04)
+        B05 = np.where(B05 == 0, np.nan, B05)
 
         with np.errstate(divide="ignore", invalid="ignore"):
-            chl_a         = 4.26      * np.power(B03 / B01,           3.94)
-            cyanobacteria = 115530.31 * np.power((B03 * B04) / B02,   2.38)
+            chl_a         = 4.26      * np.power(B03 / B01,          3.94)
+            cyanobacteria = 115530.31 * np.power((B03 * B04) / B02,  2.38)
             turbidity     = 8.93 * (B03 / B01) - 6.39
             cdom          = 537  * np.exp(-2.93 * B03 / B04)
             doc           = 432  * np.exp(-2.24 * B03 / B04)
 
-            ndwi = (B03 - B08) / (B03 + B08)  # water index
+            # B05 (705nm red-edge) used as NIR proxy since B06/B08 are missing
+            ndwi = (B03 - B05) / (B03 + B05)  # water index
             ndti = (B04 - B03) / (B04 + B03)  # turbidity index
             ndci = (B05 - B04) / (B05 + B04)  # chlorophyll index
 
@@ -65,15 +65,15 @@ for nc_path in nc_paths:
             "doc":           np.nanmean(doc),
         })
 
-        # Explicitly free memory before next slice
-        del B01, B02, B03, B04, B05, B08
+        # Free memory before next slice
+        del B01, B02, B03, B04, B05
         del chl_a, cyanobacteria, turbidity, cdom, doc
         del ndwi, ndti, ndci
 
     df = pd.DataFrame(records)
     print(df)
     dfs.append(df)
-    ds.close()  # release file handle + memory
+    ds.close()
 
 merged = pd.concat(dfs, ignore_index=True).sort_values("timestamp").reset_index(drop=True)
 out = OUTPUT_DIR / "vardar_wq_merged.parquet"
