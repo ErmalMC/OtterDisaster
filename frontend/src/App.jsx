@@ -88,6 +88,7 @@ function App() {
         onClear={clearLiveFeed}
         liveCount={liveFeed.length}
         alertCount={liveAlerts.length}
+        current={current}
       />
 
       <main className="space-y-4 p-4">
