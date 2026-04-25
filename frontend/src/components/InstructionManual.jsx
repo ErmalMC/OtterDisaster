@@ -50,12 +50,13 @@ export function InstructionManual({ onDeploy, onGoToMap }) {
         {/* Header */}
         <div className="flex items-center justify-between mb-12 animate-[fade-in_0.6s_ease-out]">
           <div className="flex items-center gap-3">
-            <div className="size-9 rounded-xl bg-[var(--metal-900)] flex items-center justify-center shadow-[var(--shadow-glass)]">
-              <div className="size-2 rounded-full bg-[var(--aqua-glow)] shadow-[var(--shadow-glow-aqua)]" />
-            </div>
+{/*                logo on instruction page - the logo is made from html elements*/}
+{/*             <div className="size-9 rounded-xl bg-[var(--metal-900)] flex items-center justify-center shadow-[var(--shadow-glass)]"> */}
+{/*               <div className="size-2 rounded-full bg-[var(--aqua-glow)] shadow-[var(--shadow-glow-aqua)]" />  */}
+{/*             </div> */}
             <div>
               <h1 className="font-data text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--aqua-600)]">
-                Hydronet · v2.4
+                Otterware · v1.0
               </h1>
               <p className="text-sm font-medium text-[var(--metal-800)]">
                 Water Quality Monitor
@@ -123,7 +124,7 @@ export function InstructionManual({ onDeploy, onGoToMap }) {
             </h3>
             <p className="text-sm text-[var(--metal-500)]">
               Ollie, our field unit, is standing by. Press Deploy to confirm the
-              probe has been submerged.
+              probe has been submerged, or just view the map.
             </p>
           </div>
           <div className="relative z-10 flex items-center gap-3">
@@ -151,7 +152,7 @@ export function InstructionManual({ onDeploy, onGoToMap }) {
             <button
               onClick={handleGoToMap}
               disabled={deploying}
-              className="px-6 py-4 bg-white/85 text-[var(--metal-800)] font-medium rounded-2xl border border-[var(--metal-200)] shadow-[var(--shadow-glass)] hover:bg-white transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+              className="px-6 py-4 bg-white/85 text-[var(--metal-800)] font-medium rounded-2xl border border-[var(--metal-200)] shadow-[var(--shadow-glass)] hover:shadow-xl transition-all hover:-translate-y-0.5 disabled:opacity-70 hover:bg-white transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
             >
               Go to map
             </button>
