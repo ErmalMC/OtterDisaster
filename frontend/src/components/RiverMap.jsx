@@ -25,8 +25,8 @@ function seededOffset(seed, span) {
   return (normalized - 0.5) * span
 }
 
-export default function RiverMap({ sites, liveFeed, currentSeverity }) {
-  const [hovered, setHovered] = useState(null)
+export default function RiverMap({ sites, liveFeed, currentSeverity, onPointSelect }) {
+  const [selected, setSelected] = useState(null)
 
   const mapPoints = liveFeed.slice(-14).map((point) => ({
     ...point,
@@ -34,12 +34,36 @@ export default function RiverMap({ sites, liveFeed, currentSeverity }) {
     top: 52 + seededOffset(`${point.id}-y`, 26),
   }))
 
-  const tooltipLeft = hovered ? Math.min(88, Math.max(12, hovered.left)) : 50
-  const tooltipTop = hovered ? (hovered.top > 24 ? hovered.top - 4 : hovered.top + 8) : 50
-  const tooltipFromTop = hovered ? hovered.top <= 24 : false
-
   function formatDate(iso) {
     return new Date(iso).toLocaleString()
+  }
+
+  function buildSitePayload(site) {
+    return {
+      kind: 'site',
+      id: site.name,
+      title: site.name,
+      subtitle: site.active ? 'Online monitoring node' : 'Offline planned node',
+      details: ['Type: Sensor point', `Status: ${site.active ? 'Active' : 'Offline'}`],
+      raw: site,
+    }
+  }
+
+  function buildReadingPayload(point) {
+    return {
+      kind: 'reading',
+      id: point.id,
+      title: `${point.severity || 'OK'} reading`,
+      subtitle: point.diagnosis,
+      details: [
+        `Time: ${formatDate(point.timestamp)}`,
+        `Source: ${point.dataSource || 'SIMULATED'}`,
+        `pH: ${Number(point.ardPh).toFixed(2)}`,
+        `Conductivity: ${Number(point.ardConductivity).toFixed(0)} uS/cm`,
+        `Turbidity: ${Number(point.satTurbidity).toFixed(1)}`,
+      ],
+      raw: point,
+    }
   }
 
   return (
@@ -50,6 +74,17 @@ export default function RiverMap({ sites, liveFeed, currentSeverity }) {
       </div>
 
       <div className="relative mt-3 min-h-[280px] overflow-hidden rounded-xl border border-slate-700 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900">
+        <button
+          type="button"
+          aria-label="Clear selected map point"
+          className="absolute inset-0 z-0"
+          onClick={() => {
+            setSelected(null)
+            if (typeof onPointSelect === 'function') {
+              onPointSelect(null)
+            }
+          }}
+        />
         <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden="true">
           <path
             d="M2,22 C18,25 28,34 42,38 C57,43 64,59 82,65 C90,67 97,76 99,88"
@@ -65,35 +100,21 @@ export default function RiverMap({ sites, liveFeed, currentSeverity }) {
           <button
             key={site.name}
             type="button"
-            className={`absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-4 transition ${
+            className={`absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-4 transition cursor-pointer ${
               site.active
                 ? 'bg-emerald-400 ring-emerald-400/25'
                 : 'bg-slate-400 ring-slate-400/20'
             }`}
-            style={{ left: `${site.x}%`, top: `${site.y}%` }}
-            onMouseEnter={() =>
-              setHovered({
-                type: 'site',
-                left: site.x,
-                top: site.y,
-                title: site.name,
-                subtitle: site.active ? 'Online monitoring node' : 'Offline planned node',
-                details: ['Type: Sensor point', `Status: ${site.active ? 'Active' : 'Offline'}`],
-              })
-            }
-            onMouseLeave={() => setHovered(null)}
-            onFocus={() =>
-              setHovered({
-                type: 'site',
-                left: site.x,
-                top: site.y,
-                title: site.name,
-                subtitle: site.active ? 'Online monitoring node' : 'Offline planned node',
-                details: ['Type: Sensor point', `Status: ${site.active ? 'Active' : 'Offline'}`],
-              })
-            }
-            onBlur={() => setHovered(null)}
+            onClick={() => {
+              const isSame = selected?.kind === 'site' && selected?.id === site.name
+              const payload = isSame ? null : buildSitePayload(site)
+              setSelected(payload)
+              if (typeof onPointSelect === 'function') {
+                onPointSelect(payload)
+              }
+            }}
             aria-label={site.name}
+            style={{ left: `${site.x}%`, top: `${site.y}%`, zIndex: 10 }}
           >
             <span className="sr-only">{site.name}</span>
           </button>
@@ -109,63 +130,19 @@ export default function RiverMap({ sites, liveFeed, currentSeverity }) {
             style={{
               left: `${point.left}%`,
               top: `${point.top}%`,
+              zIndex: 10,
             }}
-            onMouseEnter={() =>
-              setHovered({
-                type: 'reading',
-                left: point.left,
-                top: point.top,
-                title: `${point.severity || 'OK'} reading`,
-                subtitle: point.diagnosis,
-                details: [
-                  `Time: ${formatDate(point.timestamp)}`,
-                  `Source: ${point.dataSource || 'SIMULATED'}`,
-                  `pH: ${Number(point.ardPh).toFixed(2)}`,
-                  `Conductivity: ${Number(point.ardConductivity).toFixed(0)} uS/cm`,
-                  `Turbidity: ${Number(point.satTurbidity).toFixed(1)}`,
-                ],
-              })
-            }
-            onMouseLeave={() => setHovered(null)}
-            onFocus={() =>
-              setHovered({
-                type: 'reading',
-                left: point.left,
-                top: point.top,
-                title: `${point.severity || 'OK'} reading`,
-                subtitle: point.diagnosis,
-                details: [
-                  `Time: ${formatDate(point.timestamp)}`,
-                  `Source: ${point.dataSource || 'SIMULATED'}`,
-                  `pH: ${Number(point.ardPh).toFixed(2)}`,
-                  `Conductivity: ${Number(point.ardConductivity).toFixed(0)} uS/cm`,
-                  `Turbidity: ${Number(point.satTurbidity).toFixed(1)}`,
-                ],
-              })
-            }
-            onBlur={() => setHovered(null)}
+            onClick={() => {
+              const isSame = selected?.kind === 'reading' && selected?.id === point.id
+              const payload = isSame ? null : buildReadingPayload(point)
+              setSelected(payload)
+              if (typeof onPointSelect === 'function') {
+                onPointSelect(payload)
+              }
+            }}
             aria-label={`${point.severity || 'OK'} reading`}
           />
         ))}
-
-        {hovered && (
-          <div
-            className="pointer-events-none absolute z-20 w-64 -translate-x-1/2 rounded-lg border border-slate-600 bg-slate-900/95 p-3 text-xs shadow-xl"
-            style={{
-              left: `${tooltipLeft}%`,
-              top: `${tooltipTop}%`,
-              transform: tooltipFromTop ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
-            }}
-          >
-            <p className="font-semibold text-slate-100">{hovered.title}</p>
-            <p className="mt-1 text-slate-300">{hovered.subtitle}</p>
-            <ul className="mt-2 space-y-1 text-slate-400">
-              {hovered.details.map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-400">
@@ -173,7 +150,7 @@ export default function RiverMap({ sites, liveFeed, currentSeverity }) {
           Current status:{' '}
           <strong style={{ color: SEVERITY_COLOR[currentSeverity] || '#3fb950' }}>{currentSeverity}</strong>
         </span>
-        <span className="text-xs">Hover a dot to inspect site or reading data.</span>
+        <span className="text-xs">Click a dot to send its data to the top message area.</span>
       </div>
     </section>
   )
