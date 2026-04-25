@@ -1,16 +1,44 @@
-# React + Vite
+# WaterGuard Frontend Demo
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This Vite + React app now runs a **WaterGuard-style real-time river monitoring dashboard** for the Vardar River demo scenario.
 
-Currently, two official plugins are available:
+It includes:
+- TailwindCSS-driven dashboard UI (no custom component stylesheet required)
+- historical seed data generation (55 weeks)
+- live reading injection controls for scenario, rainfall, and temperature
+- mock satellite band integration (B03/B04/B07/B08/B11) with local cache
+- browser-side anomaly scoring + severity classification
+- map panel, alert feed, metric cards, trend charts, and diagnosis reference table
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Quick start
 
-## React Compiler
+```bash
+npm install
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Then open the local URL Vite prints in the terminal.
 
-## Expanding the ESLint configuration
+## Current data mode
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+For now, the frontend uses **mock satellite fetches only** and stores results in browser local storage to mimic caching.
+
+When your Python backend is ready, we can wire the fetch service to your API in a small follow-up change.
+
+## Scripts
+
+```bash
+npm run dev
+npm run lint
+npm run build
+npm run preview
+```
+
+## Project structure
+
+- `src/hooks/useWaterGuard.js` app orchestration state and actions
+- `src/services/simulatorService.js` telemetry generation and historical seed
+- `src/services/satelliteService.js` mock satellite fetch + local cache
+- `src/utils/anomalyDetection.js` in-browser anomaly scoring and diagnosis
+- `src/components/*` dashboard UI panels
+- `src/App.jsx` shell composition
