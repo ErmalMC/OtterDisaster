@@ -1,12 +1,20 @@
 import { useState } from "react";
 import { Otter } from "./Otter";
 
-export function InstructionManual({ onDeploy }) {
+export function InstructionManual({ onDeploy, onGoToMap }) {
   const [deploying, setDeploying] = useState(false);
 
   const handleDeploy = () => {
     setDeploying(true);
     setTimeout(onDeploy, 1400);
+  };
+
+  const handleGoToMap = () => {
+    if (onGoToMap) {
+      onGoToMap();
+      return;
+    }
+    onDeploy();
   };
 
   const steps = [
@@ -118,29 +126,36 @@ export function InstructionManual({ onDeploy }) {
               probe has been submerged.
             </p>
           </div>
-          <button
-            onClick={handleDeploy}
-            disabled={deploying}
-            className="relative z-10 group px-7 py-4 bg-[var(--metal-900)] text-white font-medium rounded-2xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-wait flex items-center gap-3 cursor-pointer"
-          >
-            <span className="relative z-10">
-              {deploying ? "Deploying probe…" : "Deploy probe"}
-            </span>
-            {!deploying && (
-              <svg
-                className="size-4 transition-transform group-hover:translate-x-0.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M5 12h14M13 6l6 6-6 6" />
-              </svg>
-            )}
-            {deploying && (
-              <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            )}
-          </button>
+          <div className="relative z-10 flex items-center gap-3">
+            <button
+              onClick={handleDeploy}
+              disabled={deploying}
+              className="group px-7 py-4 bg-[var(--metal-900)] text-white font-medium rounded-2xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-wait flex items-center gap-3 cursor-pointer"
+            >
+              <span>{deploying ? "Deploying probe..." : "Deploy probe"}</span>
+              {!deploying && (
+                <svg
+                  className="size-4 transition-transform group-hover:translate-x-0.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M5 12h14M13 6l6 6-6 6" />
+                </svg>
+              )}
+              {deploying && (
+                <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              )}
+            </button>
+            <button
+              onClick={handleGoToMap}
+              disabled={deploying}
+              className="px-6 py-4 bg-white/85 text-[var(--metal-800)] font-medium rounded-2xl border border-[var(--metal-200)] shadow-[var(--shadow-glass)] hover:bg-white transition-colors disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+            >
+              Go to map
+            </button>
+          </div>
         </div>
       </div>
     </div>

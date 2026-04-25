@@ -7,7 +7,12 @@ function App() {
   const [phase, setPhase] = useState("manual");
 
   if (phase === "manual") {
-    return <InstructionManual onDeploy={() => setPhase("confirmation")} />;
+    return (
+      <InstructionManual
+        onDeploy={() => setPhase("confirmation")}
+        onGoToMap={() => setPhase("dashboard")}
+      />
+    );
   }
 
   if (phase === "confirmation") {
