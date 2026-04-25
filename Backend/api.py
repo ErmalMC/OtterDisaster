@@ -20,7 +20,6 @@ Environment variables:
     PORT            port      (default: 5000)
 """
 
-import json
 import logging
 import os
 from datetime import datetime
@@ -28,7 +27,7 @@ from datetime import datetime
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-from inference import AquaSenseInference
+from Backend.data.inference import AquaSenseInference
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger(__name__)

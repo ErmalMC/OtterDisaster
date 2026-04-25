@@ -154,13 +154,15 @@ def load_satellite_data(path: Path) -> pd.DataFrame:
     df = df.sort_values("timestamp").reset_index(drop=True)
     log.info(f"[S2] Loaded {len(df)} monthly observations")
 
-    # Expand monthly → weekly via linear interpolation
+    # Expand monthly → daily via linear interpolation
+    # Always extend through today so freshness is never artificially stale
     df = df.set_index("timestamp")
-    weekly_index = pd.date_range(df.index.min(), df.index.max(), freq="W")
-    df = df.reindex(df.index.union(weekly_index))
+    end_date = max(df.index.max(), pd.Timestamp.today().normalize())
+    daily_index = pd.date_range(df.index.min(), end_date, freq="D")
+    df = df.reindex(df.index.union(daily_index))
     numeric_cols = df.select_dtypes(include=[np.number]).columns
-    df[numeric_cols] = df[numeric_cols].interpolate(method="time")
-    df = df.loc[weekly_index].reset_index().rename(columns={"index": "timestamp"})
+    df[numeric_cols] = df[numeric_cols].interpolate(method="time").ffill()
+    df = df.loc[daily_index].reset_index().rename(columns={"index": "timestamp"})
     log.info(f"[S2] Expanded to {len(df)} weekly observations")
 
     if "cyanobacteria" in df.columns:
@@ -493,7 +495,19 @@ def classify_anomaly_type(row: pd.Series) -> int:
     if row.get("ndti", 0) > t["ndti_high"]:
         return 1  # turbidity event
 
-    return 1
+    # Sensor-only fallback classification when satellite signals are flat
+    ph_val  = row.get("ph",  7.0)
+    tds_val = row.get("tds", 0.0)
+    if ph_val < 4.5:
+        return 6   # extreme acid → acid mine drainage even without high TDS
+    if ph_val < t["ph_acid"]:
+        return 6   # acid signature
+    if tds_val > t["tds_moderate"]:
+        return 4   # TDS alone → industrial discharge
+    if ph_val > t["ph_alkaline"]:
+        return 4   # alkaline → industrial / chemical
+
+    return 1  # default: turbidity
 
 
 def merge_expert_labels(df: pd.DataFrame, labels_path: Path) -> pd.Series:
@@ -607,9 +621,13 @@ def predict_single(pipeline, feature_names: list, observation: dict) -> dict:
 
 
 def severity_level(score: float) -> str:
-    if score < 0.4: return "normal"
-    if score < 0.6: return "watch"
-    if score < 0.8: return "warning"
+    """
+    Severity bands. Threshold is 0.50 (rule-based overrides ensure
+    extreme sensor readings always exceed this).
+    """
+    if score < 0.50: return "normal"
+    if score < 0.65: return "watch"
+    if score < 0.80: return "warning"
     return "critical"
 
 
@@ -669,7 +687,7 @@ def main():
                         help="Path to Sentinel-3 SLSTR LST merged parquet (optional)")
     parser.add_argument("--sensor", type=Path, required=True)
     parser.add_argument("--labels", type=Path, default=None)
-    parser.add_argument("--output", type=Path, default=Path("models/"))
+    parser.add_argument("--output", type=Path, default=Path("../models/"))
     parser.add_argument("--discover", action="store_true")
     args = parser.parse_args()
 
