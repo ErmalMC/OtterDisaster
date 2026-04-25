@@ -3,6 +3,7 @@
 This Vite + React app now runs a **WaterGuard-style real-time river monitoring dashboard** for the Vardar River demo scenario.
 
 It includes:
+
 - TailwindCSS-driven dashboard UI (no custom component stylesheet required)
 - historical seed data generation (55 weeks)
 - live reading injection controls for scenario, rainfall, and temperature
