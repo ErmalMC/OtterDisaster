@@ -7,7 +7,7 @@ import {
   Tooltip,
   ZoomControl,
 } from "react-leaflet";
-import { Otter } from "./Otter.jsx";
+// import { Otter } from "./Otter.jsx";
 
 const MAP_CENTER = [41.9973, 21.428];
 const MAP_ZOOM = 12;
@@ -16,7 +16,7 @@ const SENSOR_POINTS = [
   {
     id: "otter-04",
     position: [41.9973, 21.428],
-    active: true,
+    active: false,
     label: "OTTER-04",
     reading: "WQI 94",
     status: "Optimal",
@@ -230,9 +230,9 @@ export function Dashboard({ onReset }) {
       </div>
 
       {/* Otter swimming - bottom right */}
-      <div className="absolute bottom-8 right-8 z-20 w-32 opacity-90 pointer-events-none animate-[swim_8s_ease-in-out_infinite]">
-        <Otter className="w-full drop-shadow-lg" />
-      </div>
+      {/*<div className="absolute bottom-8 right-8 z-20 w-32 opacity-90 pointer-events-none animate-[swim_8s_ease-in-out_infinite]">*/}
+      {/*  <Otter className="w-full drop-shadow-lg" />*/}
+      {/*</div>*/}
 
       {/* Main panel */}
       <aside className="relative z-20 w-[440px] max-w-[92vw] h-[calc(100dvh-3rem)] m-6 flex flex-col gap-4 animate-[fade-up_0.6s_ease-out_0.1s_both]">
