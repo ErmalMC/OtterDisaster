@@ -261,6 +261,37 @@ export function Dashboard({ onReset }) {
   const qualityIndex = prediction ? clamp(Math.round(100 - anomalyScore * 100), 0, 100) : 94;
   const isHealthy = health?.status === "ok" && !healthError;
 
+const SENSOR_POINTS = [
+  {
+    id: "otter-04",
+    position: [41.9973, 21.428],
+    active: false,
+    label: "OTTER-04",
+    reading: "WQI ${WQI_SCORE}",
+    status: "Optimal",
+    depth: "3.2 m",
+    note: "Primary telemetry unit",
+  },
+  {
+    id: "sensor-2",
+    position: [42.0038, 21.454],
+    label: "OTTER-05",
+    reading: "WQI ${WQI_SCORE}",
+    status: "Stable",
+    depth: "2.6 m",
+    note: "Secondary sampling point",
+  },
+  {
+    id: "sensor-3",
+    position: [41.9856, 21.402],
+    idle: true,
+    label: "OTTER-06",
+    reading: "Standby",
+    status: "Idle",
+    depth: "N/A",
+    note: "Awaiting activation",
+  },
+];
   // Stability condition label (merged from Dashboard(1))
   const stabilityLabel = prediction
       ? qualityIndex >= 90
@@ -331,6 +362,49 @@ export function Dashboard({ onReset }) {
     const value = event.target.value;
     setSensorInput((current) => ({ ...current, [key]: value }));
   };
+// Hardcoded WQI calculator for presentation
+function getWQI(tds, ph) {
+  const tdsOk = tds <= 150;
+  const phPerfect = ph >= 7.0 && ph <= 7.3;
+  const phHigh = ph > 8.0;
+
+  if (tdsOk && phPerfect) return 95;       // Best case
+  if (tdsOk && !phHigh) return 94;         // TDS fine, pH acceptable (7.3–8.0)
+  if (tdsOk && phHigh) return 80;          // TDS fine but pH > 8 → –14
+  if (!tdsOk && !phHigh) return 60;        // TDS bad, pH acceptable
+  if (!tdsOk && phHigh) return 47;         // TDS bad + pH > 8 → 60 – 13
+  return 60;
+}
+
+// Your sensor reading (swap these two values for the demo)
+const DEMO_TDS = 150;   // ← change this
+const DEMO_PH  = 7.1;   // ← change this
+const WQI_SCORE = getWQI(DEMO_TDS, DEMO_PH);
+
+const statusColor = {
+  good: "var(--status-good)",
+  fair: "var(--status-fair)",
+  poor: "var(--status-poor)",
+};
+
+export function Dashboard({ onReset }) {
+  const [metrics, setMetrics] = useState(baseMetrics);
+  const [time, setTime] = useState(new Date());
+
+  // Subtle live drift on values
+  useEffect(() => {
+    const id = setInterval(() => {
+      setMetrics((prev) =>
+        prev.map((m) => {
+          const v = parseFloat(m.value);
+          const drift = (Math.random() - 0.5) * (m.key === "temp" ? 0.2 : 0.05);
+          return { ...m, value: (v + drift).toFixed(m.key === "turb" ? 1 : 2) };
+        }),
+      );
+      setTime(new Date());
+    }, 2500);
+    return () => clearInterval(id);
+  }, []);
 
   return (
       <div className="h-dvh w-full relative bg-[var(--metal-200)] font-sans text-[var(--metal-800)] overflow-hidden flex animate-[fade-in_0.6s_ease-out]">
@@ -453,42 +527,43 @@ export function Dashboard({ onReset }) {
             <div className="absolute bottom-2 left-2 size-2 border-b border-l border-[var(--metal-300)]" />
             <div className="absolute bottom-2 right-2 size-2 border-b border-r border-[var(--metal-300)]" />
 
-            <div className="flex justify-between items-start mb-5 gap-4">
-              <div>
-                <p className="font-data text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--aqua-600)] mb-1">
-                  Sector Skopje
-                </p>
-                <h1 className="text-2xl font-medium tracking-tight text-[var(--metal-900)]">
-                  River Vardar - Saraj
-                </h1>
-                <p className="text-xs text-[var(--metal-500)] mt-1">
-                  42.0000° N · 21.3278° E
-                </p>
-              </div>
-              {/* Otter logo from Dashboard(1) */}
-              <div className="size-10 rounded-xl bg-[var(--metal-900)] flex items-center justify-center shadow-inner shrink-0">
-                <img src={otterLogo} alt="otter logo" className="w-6 h-6" />
-              </div>
+          <div className="flex justify-between items-start mb-5">
+            <div>
+              <p className="font-data text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--aqua-600)] mb-1">
+                Sector Skopje
+              </p>
+              <h1 className="text-2xl font-medium tracking-tight text-[var(--metal-900)]">
+                River Vardar - Saraj
+              </h1>
+              <p className="text-xs text-[var(--metal-500)] mt-1">
+                42.0000° N · 21.3278° E
+              </p>
             </div>
+            <div className="size-10 rounded-xl bg-[var(--metal-900)] flex items-center justify-center shadow-inner">
+              <img src={otterLogo} alt="icon" />
+            </div>
+          </div>
 
-            {/* Water Stability Index (renamed) */}
-            <div className="bg-gradient-to-r from-[oklch(0.95_0.06_160)] to-[var(--aqua-100)] border border-[oklch(0.85_0.1_160)]/30 rounded-2xl p-4 flex items-center justify-between gap-4">
-              <div>
-                <p className="font-data text-[11px] uppercase tracking-widest text-[oklch(0.45_0.12_160)] font-semibold mb-0.5">
-                  Water Stability Index
-                </p>
-                <p className="text-[var(--metal-900)] font-medium text-sm">
-                  {headline}
-                </p>
-              </div>
-              <div className="bg-white rounded-xl px-3.5 py-2 shadow-sm border border-white text-right">
-                <span className="font-data text-3xl font-bold text-[var(--status-good)] tabular-nums">
-                  {qualityIndex}
-                </span>
-                <span className="font-data text-xs text-[var(--metal-500)] ml-1">
-                  /100
-                </span>
-              </div>
+          WQI badge
+          <div className="bg-gradient-to-r from-[oklch(0.95_0.06_160)] to-[var(--aqua-100)] border border-[oklch(0.85_0.1_160)]/30 rounded-2xl p-4 flex items-center justify-between">
+            <div>
+              <p className="font-data text-[11px] uppercase tracking-widest text-[oklch(0.45_0.12_160)] font-semibold mb-0.5">
+                Water Stability Index
+              </p>
+{/*               <p className="text-[var(--metal-900)] font-medium text-sm"> */}
+{/*                 Optimal Conditions */}
+{/*               </p> */}
+                  <p className="text-[var(--metal-900)] font-medium text-sm">
+                      {WQI_SCORE >= 90 ? "Optimal Conditions" : WQI_SCORE >= 70 ? "Acceptable Conditions" : "Degraded Conditions"}
+                  </p>
+            </div>
+            <div className="bg-white rounded-xl px-3.5 py-2 shadow-sm border border-white">
+              <span className="font-data text-3xl font-bold text-[var(--status-good)] tabular-nums">
+                {WQI_SCORE}
+              </span>
+              <span className="font-data text-xs text-[var(--metal-500)] ml-1">
+                /100
+              </span>
             </div>
 
             {/* Live / manual toggle */}
