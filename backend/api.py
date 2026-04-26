@@ -4,28 +4,32 @@ AquaSense — Flask API Server
 Exposes the inference engine over HTTP so the UI can call it.
 
 Endpoints:
-  POST /api/predict           — live Arduino reading → anomaly result
-  GET  /api/health            — health check + satellite age
-  POST /api/reload_satellite  — call after a new OpenEO download completes
+  POST /predict           — live Arduino reading → anomaly result
+  GET  /health            — health check + satellite age
+  POST /reload_satellite  — call after a new OpenEO download completes
 
 Run:
     pip install flask
     python api.py
 
 Environment variables:
-    MODEL_PATH      path to rf_anomaly_model.pkl   (default: backend/models/rf_anomaly_model.pkl)
-    SAT_PARQUET     path to vardar_wq_merged.parquet (default: backend/data/vardar_wq_results/vardar_wq_merged.parquet)
+    MODEL_PATH      path to rf_anomaly_model.pkl   (default: models/rf_anomaly_model.pkl)
+    SAT_PARQUET     path to vardar_wq_merged.parquet (default: vardar_wq_results/vardar_wq_merged.parquet)
     LAT             latitude  (default: 41.99)
     LON             longitude (default: 21.43)
     PORT            port      (default: 5000)
 """
 
+import json
 import logging
 import os
+import queue
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response, stream_with_context
 from flask_cors import CORS
 
 from backend.data.inference import AquaSenseInference
@@ -36,17 +40,17 @@ log = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)   # allow the UI (different port) to call the API
 
-API_PREFIX = "/api"
-
 # ── Initialise engine at startup ─────────────────────────────────────────────
-BACKEND_DIR = Path(__file__).resolve().parent
-MODEL_PATH  = os.environ.get("MODEL_PATH", str(BACKEND_DIR / "models" / "rf_anomaly_model.pkl"))
-SAT_PARQUET = os.environ.get(
-    "SAT_PARQUET",
-    str(BACKEND_DIR / "data" / "vardar_wq_results" / "vardar_wq_merged.parquet"),
-)
-LAT         = float(os.environ.get("LAT", 41.99))
-LON         = float(os.environ.get("LON", 21.43))
+MODEL_PATH    = os.environ.get("MODEL_PATH",    "models/rf_anomaly_model.pkl")
+SAT_PARQUET   = os.environ.get("SAT_PARQUET",   "vardar_wq_results/vardar_wq_merged.parquet")
+LAT           = float(os.environ.get("LAT", 41.99))
+LON           = float(os.environ.get("LON", 21.43))
+ARDUINO_CSV   = os.environ.get("ARDUINO_CSV",   "data/arduino_output.csv")
+PREDICTIONS_LOG = Path(os.environ.get("PREDICTIONS_LOG", "data/predictions_log.jsonl"))
+
+# SSE subscribers — each connected frontend client gets a queue
+_sse_subscribers: list[queue.Queue] = []
+_sse_lock = threading.Lock()
 
 engine: AquaSenseInference | None = None
 
@@ -62,9 +66,30 @@ def get_engine() -> AquaSenseInference:
     return engine
 
 
+def _log_prediction(result: dict):
+    """Append prediction result to JSONL log file and broadcast to SSE subscribers."""
+    try:
+        PREDICTIONS_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(PREDICTIONS_LOG, "a") as f:
+            f.write(json.dumps(result) + "\n")
+    except Exception as e:
+        log.warning(f"Could not write prediction log: {e}")
+
+    # Broadcast to all connected SSE clients
+    payload = json.dumps(result)
+    with _sse_lock:
+        dead = []
+        for q in _sse_subscribers:
+            try:
+                q.put_nowait(payload)
+            except queue.Full:
+                dead.append(q)
+        for q in dead:
+            _sse_subscribers.remove(q)
+
+
 # ── Routes ───────────────────────────────────────────────────────────────────
 
-@app.route(f"{API_PREFIX}/predict", methods=["POST"])
 @app.route("/predict", methods=["POST"])
 def predict():
     """
@@ -100,6 +125,7 @@ def predict():
             timestamp=ts,
         )
 
+        _log_prediction(result)
         return jsonify(result), 200
 
     except FileNotFoundError as e:
@@ -110,7 +136,95 @@ def predict():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route(f"{API_PREFIX}/health", methods=["GET"])
+@app.route("/arduino", methods=["POST"])
+def arduino():
+    """
+    POST /arduino
+    Reads the latest row from arduino_output.csv, runs inference,
+    logs the result, and returns it as JSON to the frontend.
+    Optional body: { "csv_path": "/custom/path/arduino_output.csv" }
+    """
+    try:
+        body     = request.get_json(force=True, silent=True) or {}
+        csv_path = body.get("csv_path", ARDUINO_CSV)
+        result   = get_engine().predict_from_arduino(csv_path)
+        _log_prediction(result)
+        return jsonify(result), 200
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+    except Exception as e:
+        log.exception("Arduino prediction failed")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/history", methods=["GET"])
+def history():
+    """
+    GET /history?limit=100
+    Returns the last N predictions from the log as a JSON array.
+    The frontend uses this to populate charts and history tables.
+    """
+    try:
+        limit = int(request.args.get("limit", 100))
+        if not PREDICTIONS_LOG.exists():
+            return jsonify([]), 200
+
+        lines = PREDICTIONS_LOG.read_text().strip().splitlines()
+        # Return the most recent `limit` entries
+        recent = lines[-limit:]
+        results = [json.loads(line) for line in recent if line.strip()]
+        return jsonify(results), 200
+    except Exception as e:
+        log.exception("History fetch failed")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/stream", methods=["GET"])
+def stream():
+    """
+    GET /stream
+    Server-Sent Events endpoint. The frontend connects once and receives
+    every new prediction in real time as it happens — no polling needed.
+
+    Frontend usage (JavaScript):
+        const es = new EventSource("http://localhost:5000/stream");
+        es.onmessage = (e) => {
+            const result = JSON.parse(e.data);
+            updateDashboard(result);
+        };
+    """
+    q: queue.Queue = queue.Queue(maxsize=50)
+    with _sse_lock:
+        _sse_subscribers.append(q)
+
+    def event_generator():
+        # Send a connected ping immediately so the frontend knows it's live
+        yield "event: connected\ndata: {\"status\": \"connected\"}\n\n"
+        try:
+            while True:
+                try:
+                    payload = q.get(timeout=25)
+                    yield f"data: {payload}\n\n"
+                except queue.Empty:
+                    # Keepalive comment so the connection doesn't time out
+                    yield ": keepalive\n\n"
+        except GeneratorExit:
+            pass
+        finally:
+            with _sse_lock:
+                if q in _sse_subscribers:
+                    _sse_subscribers.remove(q)
+
+    return Response(
+        stream_with_context(event_generator()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control":    "no-cache",
+            "X-Accel-Buffering": "no",   # Nginx: disable buffering for SSE
+        },
+    )
+
+
 @app.route("/health", methods=["GET"])
 def health():
     """Returns model status and satellite freshness."""
@@ -131,7 +245,6 @@ def health():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
-@app.route(f"{API_PREFIX}/reload_satellite", methods=["POST"])
 @app.route("/reload_satellite", methods=["POST"])
 def reload_satellite():
     """Hot-reload satellite data after a new OpenEO download."""

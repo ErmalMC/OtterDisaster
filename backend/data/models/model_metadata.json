@@ -25,7 +25,6 @@
     "z_cyano",
     "z_tds",
     "z_ph",
-    "z_lst",
     "multi_feature_z_count",
     "tds_lag1",
     "ph_lag1",
@@ -49,7 +48,7 @@
     "ph_acid": 6.0,
     "ph_alkaline": 9.0,
     "zscore_anomaly": 2.5,
-    "zscore_rolling_window": 30,
+    "zscore_rolling_window": 6,
     "acid_mine_tds": 800.0,
     "acid_mine_ph": 6.5,
     "lst_bloom_risk_celsius": 20.0,
@@ -63,13 +62,14 @@
     "3": "toxic_cyanobacteria",
     "4": "industrial_discharge",
     "5": "organic_pollution",
-    "6": "acid_mine_drainage"
+    "6": "acid_mine_drainage",
+    "7": "pure_water_anomaly"
   },
   "lst_decay_days": 7.0,
   "lst_enabled": true,
-  "cv_roc_auc": 0.9982149986866299,
-  "cv_avg_precision": 0.9942747368599131,
-  "n_train": 1576,
-  "n_anomalies": 401,
-  "anomaly_rate": 0.25444162436548223
+  "cv_roc_auc": 0.9998218086422808,
+  "cv_avg_precision": 0.999578207241615,
+  "n_train": 1577,
+  "n_anomalies": 441,
+  "anomaly_rate": 0.2796448953709575
 }
