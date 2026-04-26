@@ -8,7 +8,7 @@ import {
   ZoomControl,
 } from "react-leaflet";
 
-import { fetchHealth, predictWaterQuality, fetchArduinoReading, createPredictionStream } from "../utils/aquaSenseApi.js";
+import { fetchHealth, predictWaterQuality, fetchArduinoReading } from "../utils/aquaSenseApi.js";
 
 const MAP_CENTER = [41.9973, 21.428];
 const MAP_ZOOM = 12;
@@ -33,9 +33,7 @@ function toNumber(value, fallback) {
 }
 
 function formatTime(value) {
-  if (!value) {
-    return "—";
-  }
+  if (!value) return "—";
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString();
 }
@@ -221,7 +219,6 @@ export function Dashboard({ onReset }) {
       [sensorInput],
   );
 
-  // Extracted into a useCallback so both the useEffect and the button share the same logic
   const takeLiveReading = useCallback(async () => {
     if (isCollecting) return;
     setIsCollecting(true);
@@ -257,11 +254,7 @@ export function Dashboard({ onReset }) {
     };
   }, [refreshHealth, runPrediction]);
 
-  // Fires only once when live mode is first enabled — no interval
-  useEffect(() => {
-    if (!liveMode) return;
-    takeLiveReading();
-  }, [liveMode]); // intentionally excludes takeLiveReading to prevent re-firing on every render
+  // AUTOMATIC TOGGLE EFFECT REMOVED
 
   const metrics = useMemo(() => buildMetrics(prediction, health, sensorInput), [prediction, health, sensorInput]);
   const anomalyScore = prediction?.adjusted_score ?? prediction?.anomaly_score ?? 0;
@@ -326,7 +319,6 @@ export function Dashboard({ onReset }) {
 
   return (
       <div className="h-dvh w-full relative bg-[var(--metal-200)] font-sans text-[var(--metal-800)] overflow-hidden flex animate-[fade-in_0.6s_ease-out]">
-        {/* Map background */}
         <div className="absolute inset-0 z-0">
           <MapContainer
               center={MAP_CENTER}
@@ -410,7 +402,6 @@ export function Dashboard({ onReset }) {
           </div>
         </div>
 
-        {/* Top right status */}
         <div className="absolute top-6 right-6 z-20 flex gap-3">
           <button
               onClick={onReset}
@@ -431,9 +422,7 @@ export function Dashboard({ onReset }) {
           </div>
         </div>
 
-        {/* Main panel */}
         <aside className="relative z-20 w-[440px] max-w-[92vw] h-[calc(100dvh-3rem)] m-6 flex flex-col gap-4 animate-[fade-up_0.6s_ease-out_0.1s_both]">
-          {/* Header card */}
           <div className="bg-white/85 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-3xl p-6 shrink-0 relative overflow-hidden">
             <div className="absolute top-2 left-2 size-2 border-t border-l border-[var(--metal-300)]" />
             <div className="absolute top-2 right-2 size-2 border-t border-r border-[var(--metal-300)]" />
@@ -476,7 +465,6 @@ export function Dashboard({ onReset }) {
               </div>
             </div>
 
-            {/* Live mode toggle */}
             <div className="mt-4 flex items-center gap-2 mb-3">
               <button
                   type="button"
@@ -506,7 +494,6 @@ export function Dashboard({ onReset }) {
             </span>
             </div>
 
-            {/* Form — manual mode uses submit, live mode uses Take reading button */}
             <form onSubmit={handleSubmit} className="mt-0 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
               <label className="block">
               <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold">
@@ -540,7 +527,6 @@ export function Dashboard({ onReset }) {
               </label>
 
               {liveMode ? (
-                  // Live mode: manual trigger button — user clicks when ready for next reading
                   <button
                       type="button"
                       disabled={isCollecting}
@@ -550,7 +536,6 @@ export function Dashboard({ onReset }) {
                     {isCollecting ? "Collecting…" : "Take reading"}
                   </button>
               ) : (
-                  // Manual mode: standard predict button
                   <button
                       type="submit"
                       disabled={submitting}
@@ -583,7 +568,6 @@ export function Dashboard({ onReset }) {
               </div>
           )}
 
-          {/* Metrics grid */}
           <div className="grid grid-cols-2 gap-3 shrink-0">
             {metrics.map((metric) => (
                 <div
@@ -611,7 +595,6 @@ export function Dashboard({ onReset }) {
             ))}
           </div>
 
-          {/* Backend summary */}
           <div className="bg-white/85 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-3xl p-5 flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="flex justify-between items-center mb-3 shrink-0 gap-3">
               <h3 className="text-xs font-semibold text-[var(--metal-800)]">
@@ -675,7 +658,6 @@ export function Dashboard({ onReset }) {
           </div>
         </aside>
 
-        {/* Loading overlay — shown during 10s collection window */}
         {liveMode && isCollecting && (
             <LiveLoadingOverlay
                 sampleCount={sampleCount}
