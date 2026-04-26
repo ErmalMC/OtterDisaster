@@ -48,15 +48,15 @@ export function Otter({ className }) {
       <ellipse cx="55" cy="40" rx="4" ry="3" fill="#6B5444" />
       <ellipse cx="68" cy="40" rx="4" ry="3" fill="#6B5444" />
       {/* Sensor device on belly */}
-      <rect x="56" y="36" width="12" height="6" rx="1.5" fill="#1E293B" />
-      <circle cx="62" cy="39" r="1" fill="#7DD3FC">
-        <animate
-          attributeName="opacity"
-          values="1;0.3;1"
-          dur="1.6s"
-          repeatCount="indefinite"
-        />
-      </circle>
+{/*       <rect x="56" y="36" width="12" height="6" rx="1.5" fill="#1E293B" /> */}
+{/*       <circle cx="62" cy="39" r="1" fill="#7DD3FC"> */}
+{/*         <animate */}
+{/*           attributeName="opacity" */}
+{/*           values="1;0.3;1" */}
+{/*           dur="1.6s" */}
+{/*           repeatCount="indefinite" */}
+{/*         /> */}
+{/*       </circle> */}
       {/* Tail */}
       <path d="M 100 48 Q 115 44 118 50 Q 115 52 100 52 Z" fill="#6B5444" />
       {/* Water ripples */}
