@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Otter } from "./Otter";
+import otterLogo from '../../public/otter-logo.svg';
 
 export function InstructionManual({ onDeploy, onGoToMap }) {
   const [deploying, setDeploying] = useState(false);
@@ -51,9 +52,9 @@ export function InstructionManual({ onDeploy, onGoToMap }) {
         <div className="flex items-center justify-between mb-12 animate-[fade-in_0.6s_ease-out]">
           <div className="flex items-center gap-3">
 {/*                logo on instruction page - the logo is made from html elements*/}
-{/*             <div className="size-9 rounded-xl bg-[var(--metal-900)] flex items-center justify-center shadow-[var(--shadow-glass)]"> */}
-{/*               <div className="size-2 rounded-full bg-[var(--aqua-glow)] shadow-[var(--shadow-glow-aqua)]" />  */}
-{/*             </div> */}
+             <div className="size-9 rounded-xl bg-[var(--metal-900)] flex items-center justify-center shadow-[var(--shadow-glass)]">
+               <img src={otterLogo} alt="icon" />
+             </div>
             <div>
               <h1 className="font-data text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--aqua-600)]">
                 Otterware · v1.0
