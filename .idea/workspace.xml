@@ -2,9 +2,10 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="bad43ec9-5537-4162-a0e5-b0ad77a61108" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/frontend/public/otter-logo.svg" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/data/predictions_log.jsonl" beforeDir="false" afterPath="$PROJECT_DIR$/backend/data/predictions_log.jsonl" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/components/Dashboard.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/Dashboard.jsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/InstructionManual.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/InstructionManual.jsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -43,7 +44,7 @@
     &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
     &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
     &quot;ai.playground.ignore.import.keys.banner.in.settings&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;development&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;Merging development&quot;,
     &quot;javascript.preferred.runtime.type.id&quot;: &quot;node&quot;,
     &quot;last_opened_file_path&quot;: &quot;/home/ermal/Files/Coding/Programming_Files/OtterDisaster/backend/data&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
@@ -102,7 +103,7 @@
       <updated>1777143391405</updated>
       <workItem from="1777143391410" duration="2117000" />
       <workItem from="1777184570357" duration="1717000" />
-      <workItem from="1777198054902" duration="618000" />
+      <workItem from="1777198054902" duration="1086000" />
     </task>
     <servers />
   </component>
