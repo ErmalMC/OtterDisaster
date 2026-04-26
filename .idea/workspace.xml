@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="bad43ec9-5537-4162-a0e5-b0ad77a61108" name="Changes" comment="" />
+    <list default="true" id="bad43ec9-5537-4162-a0e5-b0ad77a61108" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/data/predictions_log.jsonl" beforeDir="false" afterPath="$PROJECT_DIR$/backend/data/predictions_log.jsonl" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/Dashboard.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/Dashboard.jsx" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -98,6 +102,7 @@
       <updated>1777143391405</updated>
       <workItem from="1777143391410" duration="2117000" />
       <workItem from="1777184570357" duration="1717000" />
+      <workItem from="1777198054902" duration="618000" />
     </task>
     <servers />
   </component>
@@ -105,7 +110,7 @@
     <option name="version" value="3" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/OtterDisaster$api.coverage" NAME="api Coverage Results" MODIFIED="1777189658181" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/backend" />
+    <SUITE FILE_PATH="coverage/OtterDisaster$api.coverage" NAME="api Coverage Results" MODIFIED="1777198267851" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/backend" />
     <SUITE FILE_PATH="coverage/OtterDisaster$main.coverage" NAME="main Coverage Results" MODIFIED="1777184647792" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/backend/data" />
   </component>
   <component name="github-copilot-workspace">

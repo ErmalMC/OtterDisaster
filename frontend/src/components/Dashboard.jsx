@@ -254,8 +254,6 @@ export function Dashboard({ onReset }) {
     };
   }, [refreshHealth, runPrediction]);
 
-  // AUTOMATIC TOGGLE EFFECT REMOVED
-
   const metrics = useMemo(() => buildMetrics(prediction, health, sensorInput), [prediction, health, sensorInput]);
   const anomalyScore = prediction?.adjusted_score ?? prediction?.anomaly_score ?? 0;
   const qualityIndex = prediction ? clamp(Math.round(100 - anomalyScore * 100), 0, 100) : 94;
@@ -319,6 +317,14 @@ export function Dashboard({ onReset }) {
 
   return (
       <div className="h-dvh w-full relative bg-[var(--metal-200)] font-sans text-[var(--metal-800)] overflow-hidden flex animate-[fade-in_0.6s_ease-out]">
+        <style dangerouslySetInnerHTML={{ __html: `
+          .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+          .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+          .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--metal-300); border-radius: 10px; }
+          .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--aqua-400); }
+          .custom-scrollbar { scrollbar-width: thin; scrollbar-color: var(--metal-300) transparent; }
+        `}} />
+
         <div className="absolute inset-0 z-0">
           <MapContainer
               center={MAP_CENTER}
@@ -422,7 +428,8 @@ export function Dashboard({ onReset }) {
           </div>
         </div>
 
-        <aside className="relative z-20 w-[440px] max-w-[92vw] h-[calc(100dvh-3rem)] m-6 flex flex-col gap-4 animate-[fade-up_0.6s_ease-out_0.1s_both]">
+        {/* UPDATED ASIDE FOR SCROLLING */}
+        <aside className="relative z-20 w-[440px] max-w-[92vw] h-[calc(100dvh-3rem)] m-6 flex flex-col gap-4 overflow-y-auto pr-3 custom-scrollbar animate-[fade-up_0.6s_ease-out_0.1s_both]">
           <div className="bg-white/85 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-3xl p-6 shrink-0 relative overflow-hidden">
             <div className="absolute top-2 left-2 size-2 border-t border-l border-[var(--metal-300)]" />
             <div className="absolute top-2 right-2 size-2 border-t border-r border-[var(--metal-300)]" />
@@ -441,9 +448,6 @@ export function Dashboard({ onReset }) {
                   41.9973° N · 21.4280° E
                 </p>
               </div>
-              {/*<div className="size-10 rounded-xl bg-[var(--metal-900)] flex items-center justify-center shadow-inner shrink-0">*/}
-              {/*  <div className="size-1.5 rounded-full bg-[var(--aqua-glow)] shadow-[0_0_8px_var(--aqua-glow)]" />*/}
-              {/*</div>*/}
             </div>
 
             <div className="bg-gradient-to-r from-[oklch(0.95_0.06_160)] to-[var(--aqua-100)] border border-[oklch(0.85_0.1_160)]/30 rounded-2xl p-4 flex items-center justify-between gap-4">
@@ -553,16 +557,11 @@ export function Dashboard({ onReset }) {
               </div>
               <p className="text-sm font-medium text-[var(--metal-900)]">{message}</p>
               <p className="text-xs leading-relaxed text-[var(--metal-500)]">{explanation}</p>
-              {prediction?.weather?.note && (
-                  <p className="text-xs leading-relaxed text-[var(--metal-500)]">
-                    Weather note: {prediction.weather.note}
-                  </p>
-              )}
             </div>
           </div>
 
           {(healthError || predictionError) && (
-              <div className="rounded-2xl border border-[var(--status-poor)]/30 bg-[oklch(0.97_0.03_25)] px-4 py-3 text-sm text-[var(--metal-800)] shadow-[var(--shadow-glass)]">
+              <div className="rounded-2xl border border-[var(--status-poor)]/30 bg-[oklch(0.97_0.03_25)] px-4 py-3 text-sm text-[var(--metal-800)] shadow-[var(--shadow-glass)] shrink-0">
                 <strong className="mr-2 text-[var(--status-poor)]">Connection issue:</strong>
                 {healthError || predictionError}
               </div>
@@ -595,7 +594,8 @@ export function Dashboard({ onReset }) {
             ))}
           </div>
 
-          <div className="bg-white/85 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-3xl p-5 flex-1 flex flex-col min-h-0 overflow-hidden">
+          {/* UPDATED BOTTOM VERDICT CARD */}
+          <div className="bg-white/85 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-3xl p-5 shrink-0 flex flex-col min-h-[420px] mb-4">
             <div className="flex justify-between items-center mb-3 shrink-0 gap-3">
               <h3 className="text-xs font-semibold text-[var(--metal-800)]">
                 Backend verdict · Live response
@@ -630,7 +630,7 @@ export function Dashboard({ onReset }) {
               </div>
             </div>
 
-            <div className="flex-1 bg-[var(--metal-50)] rounded-2xl border border-[var(--metal-100)] relative overflow-hidden p-3 min-h-0">
+            <div className="flex-1 bg-[var(--metal-50)] rounded-2xl border border-[var(--metal-100)] relative overflow-hidden p-3 min-h-[140px]">
               <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-1/4 left-0" />
               <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-2/4 left-0" />
               <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-3/4 left-0" />
