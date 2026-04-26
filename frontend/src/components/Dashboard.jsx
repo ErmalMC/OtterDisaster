@@ -247,13 +247,13 @@ export function Dashboard({ onReset }) {
           <div className="flex justify-between items-start mb-5">
             <div>
               <p className="font-data text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--aqua-600)] mb-1">
-                Sector Alpha-9
+                Sector Skopje
               </p>
               <h1 className="text-2xl font-medium tracking-tight text-[var(--metal-900)]">
-                Clearwater Basin
+                River Vardar - Saraj
               </h1>
               <p className="text-xs text-[var(--metal-500)] mt-1">
-                41.9973° N · 21.4280° E
+                42.0000° N · 21.3278° E
               </p>
             </div>
             <div className="size-10 rounded-xl bg-[var(--metal-900)] flex items-center justify-center shadow-inner">
@@ -265,7 +265,7 @@ export function Dashboard({ onReset }) {
           <div className="bg-gradient-to-r from-[oklch(0.95_0.06_160)] to-[var(--aqua-100)] border border-[oklch(0.85_0.1_160)]/30 rounded-2xl p-4 flex items-center justify-between">
             <div>
               <p className="font-data text-[11px] uppercase tracking-widest text-[oklch(0.45_0.12_160)] font-semibold mb-0.5">
-                Water Quality Index
+                Water Stability Index
               </p>
               <p className="text-[var(--metal-900)] font-medium text-sm">
                 Optimal Conditions
