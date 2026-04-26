@@ -8,7 +8,9 @@ import {
   ZoomControl,
 } from "react-leaflet";
 
-import { fetchHealth, predictWaterQuality } from "../utils/aquaSenseApi.js";
+import { fetchHealth, predictWaterQuality, fetchArduinoReading, createPredictionStream } from "../utils/aquaSenseApi.js";
+
+
 
 const MAP_CENTER = [41.9973, 21.428];
 const MAP_ZOOM = 12;
@@ -121,6 +123,63 @@ function buildMetrics(prediction, health, sensorInput) {
   ];
 }
 
+function LiveLoadingOverlay({ sampleCount, windowSeconds = 10, lastUpdated }) {
+  const [progress, setProgress] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const start = Date.now();
+    const timer = setInterval(() => {
+      const ms = Date.now() - start;
+      const pct = Math.min((ms / (windowSeconds * 1000)) * 100, 100);
+      setProgress(pct);
+      setElapsed(Math.floor(ms / 1000));
+    }, 100);
+    return () => clearInterval(timer);
+  }, [lastUpdated, windowSeconds]);
+
+  return (
+      <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
+        <div className="bg-white/90 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-3xl px-8 py-6 flex flex-col items-center gap-4 min-w-[260px]">
+          {/* Animated water drop / pulse rings */}
+          <div className="relative flex items-center justify-center size-16">
+            <div className="absolute size-16 rounded-full border-2 border-[var(--aqua-300)] animate-ping opacity-40" />
+            <div className="absolute size-12 rounded-full border-2 border-[var(--aqua-400)] animate-ping opacity-60" style={{ animationDelay: "0.3s" }} />
+            <div className="size-8 rounded-full bg-[var(--aqua-500)] flex items-center justify-center shadow-lg">
+              <div className="size-3 rounded-full bg-white animate-pulse" />
+            </div>
+          </div>
+
+          <div className="text-center">
+            <p className="font-data text-[10px] uppercase tracking-[0.25em] text-[var(--aqua-600)] mb-1">
+              Collecting samples
+            </p>
+            <p className="text-sm font-medium text-[var(--metal-900)]">
+              {elapsed}s / {windowSeconds}s window
+            </p>
+            {sampleCount !== null && (
+                <p className="text-xs text-[var(--metal-500)] mt-1">
+                  {sampleCount} raw readings captured
+                </p>
+            )}
+          </div>
+
+          {/* Progress bar */}
+          <div className="w-full h-1.5 bg-[var(--metal-100)] rounded-full overflow-hidden">
+            <div
+                className="h-full bg-[var(--aqua-500)] rounded-full transition-all duration-100"
+                style={{ width: `${progress}%` }}
+            />
+          </div>
+
+          <p className="text-[10px] text-[var(--metal-400)] text-center">
+            Computing median of sensor readings…
+          </p>
+        </div>
+      </div>
+  );
+}
+
 export function Dashboard({ onReset }) {
   const [sensorInput, setSensorInput] = useState(DEFAULT_SENSOR_INPUT);
   const [health, setHealth] = useState(null);
@@ -132,6 +191,9 @@ export function Dashboard({ onReset }) {
   const [predictionError, setPredictionError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [time, setTime] = useState(new Date());
+  const [liveMode, setLiveMode] = useState(false);
+  const [sampleCount, setSampleCount] = useState(null);
+  const [isCollecting, setIsCollecting] = useState(false);
 
   const refreshHealth = useCallback(async () => {
     setLoadingHealth(true);
@@ -190,6 +252,7 @@ export function Dashboard({ onReset }) {
       }
     };
 
+
     bootstrap();
 
     const healthTimer = setInterval(() => {
@@ -206,6 +269,30 @@ export function Dashboard({ onReset }) {
       clearInterval(clockTimer);
     };
   }, [refreshHealth, runPrediction]);
+
+  useEffect(() => {
+    if (!liveMode) return;
+
+    const poll = async () => {
+      setIsCollecting(true);
+      // Wait the full 10s window so overlay is visible
+      await new Promise(res => setTimeout(res, 10000));
+      setIsCollecting(false);
+      try {
+        const data = await fetchArduinoReading();
+        setPrediction(data);
+        setPredictionError("");
+        setLastUpdated(new Date());
+        if (data?.sensor) setSampleCount(data._sample_count ?? null);
+      } catch (error) {
+        setPredictionError(error instanceof Error ? error.message : "Arduino read failed.");
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 12000);
+    return () => clearInterval(interval);
+  }, [liveMode]);
 
   const metrics = useMemo(() => buildMetrics(prediction, health, sensorInput), [prediction, health, sensorInput]);
   const anomalyScore = prediction?.adjusted_score ?? prediction?.anomaly_score ?? 0;
@@ -433,41 +520,73 @@ export function Dashboard({ onReset }) {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+          <div className="mt-4 flex items-center gap-2 mb-3">
+            <button
+                type="button"
+                onClick={() => setLiveMode((v) => !v)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    liveMode ? "bg-[var(--aqua-500)]" : "bg-[var(--metal-300)]"
+                }`}
+            >
+    <span
+        className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${
+            liveMode ? "translate-x-4" : "translate-x-0.5"
+        }`}
+    />
+            </button>
+            <span className="text-xs font-medium text-[var(--metal-700)]">
+    {liveMode ? (
+        <span className="flex items-center gap-1.5">
+        <span className="size-1.5 rounded-full bg-[var(--status-good)] animate-pulse inline-block" />
+        Live Arduino mode — polling every 12s
+          {sampleCount && (
+              <span className="text-[var(--metal-400)]">({sampleCount} samples/window)</span>
+          )}
+      </span>
+    ) : (
+        "Manual mode"
+    )}
+  </span>
+          </div>
+
+          {/* Existing form — disable inputs in live mode */}
+          <form onSubmit={handleSubmit} className="mt-0 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold">
-                TDS
-              </span>
+    <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold">
+      TDS
+    </span>
               <input
-                type="number"
-                min="0"
-                max="10000"
-                step="0.1"
-                value={sensorInput.tds}
-                onChange={handleChange("tds")}
-                className="w-full rounded-2xl border border-[var(--metal-200)] bg-white/90 px-3 py-2 text-sm text-[var(--metal-900)] outline-none transition focus:border-[var(--aqua-300)] focus:ring-2 focus:ring-[var(--aqua-100)]"
+                  type="number"
+                  min="0"
+                  max="10000"
+                  step="0.1"
+                  value={liveMode ? (prediction?.sensor?.tds_ppm ?? sensorInput.tds) : sensorInput.tds}
+                  onChange={handleChange("tds")}
+                  disabled={liveMode}
+                  className="w-full rounded-2xl border border-[var(--metal-200)] bg-white/90 px-3 py-2 text-sm text-[var(--metal-900)] outline-none transition focus:border-[var(--aqua-300)] focus:ring-2 focus:ring-[var(--aqua-100)] disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold">
-                pH
-              </span>
+    <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold">
+      pH
+    </span>
               <input
-                type="number"
-                min="0"
-                max="14"
-                step="0.01"
-                value={sensorInput.ph}
-                onChange={handleChange("ph")}
-                className="w-full rounded-2xl border border-[var(--metal-200)] bg-white/90 px-3 py-2 text-sm text-[var(--metal-900)] outline-none transition focus:border-[var(--aqua-300)] focus:ring-2 focus:ring-[var(--aqua-100)]"
+                  type="number"
+                  min="0"
+                  max="14"
+                  step="0.01"
+                  value={liveMode ? (prediction?.sensor?.ph ?? sensorInput.ph) : sensorInput.ph}
+                  onChange={handleChange("ph")}
+                  disabled={liveMode}
+                  className="w-full rounded-2xl border border-[var(--metal-200)] bg-white/90 px-3 py-2 text-sm text-[var(--metal-900)] outline-none transition focus:border-[var(--aqua-300)] focus:ring-2 focus:ring-[var(--aqua-100)] disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </label>
             <button
-              type="submit"
-              disabled={submitting}
-              className="mt-auto rounded-2xl bg-[var(--metal-900)] px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-70"
+                type="submit"
+                disabled={submitting || liveMode}
+                className="mt-auto rounded-2xl bg-[var(--metal-900)] px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {submitting ? "Querying backend..." : "Run prediction"}
+              {liveMode ? "Auto" : submitting ? "Querying..." : "Run prediction"}
             </button>
           </form>
 
@@ -604,6 +723,14 @@ export function Dashboard({ onReset }) {
           </div>
         </div>
       </aside>
+      {liveMode && isCollecting && (
+          <LiveLoadingOverlay
+              sampleCount={sampleCount}
+              windowSeconds={10}
+              lastUpdated={lastUpdated}
+          />
+      )}
     </div>
+
   );
 }
