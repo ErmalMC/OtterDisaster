@@ -8,6 +8,7 @@ import {
   ZoomControl,
 } from "react-leaflet";
 // import { Otter } from "./Otter.jsx";
+import otterLogo from '../../public/otter-logo.svg';
 
 const MAP_CENTER = [41.9973, 21.428];
 const MAP_ZOOM = 12;
@@ -256,7 +257,7 @@ export function Dashboard({ onReset }) {
               </p>
             </div>
             <div className="size-10 rounded-xl bg-[var(--metal-900)] flex items-center justify-center shadow-inner">
-              <div className="size-1.5 rounded-full bg-[var(--aqua-glow)] shadow-[0_0_8px_var(--aqua-glow)]" />
+              <img src={otterLogo} alt="icon" />
             </div>
           </div>
 
