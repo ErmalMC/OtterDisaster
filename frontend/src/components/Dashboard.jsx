@@ -261,7 +261,7 @@ export function Dashboard({ onReset }) {
             </div>
           </div>
 
-          {/* WQI badge */}
+          WQI badge
           <div className="bg-gradient-to-r from-[oklch(0.95_0.06_160)] to-[var(--aqua-100)] border border-[oklch(0.85_0.1_160)]/30 rounded-2xl p-4 flex items-center justify-between">
             <div>
               <p className="font-data text-[11px] uppercase tracking-widest text-[oklch(0.45_0.12_160)] font-semibold mb-0.5">
@@ -323,41 +323,41 @@ export function Dashboard({ onReset }) {
         </div>
 
         {/* Depth profile */}
-        <div className="bg-white/85 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-3xl p-5 flex-1 flex flex-col min-h-0 overflow-hidden">
-          <div className="flex justify-between items-center mb-3 shrink-0">
-            <h3 className="text-xs font-semibold text-[var(--metal-800)]">
-              Depth Profile · Last 12 min
-            </h3>
-            <span className="font-data text-[10px] text-[var(--aqua-600)] border border-[var(--aqua-300)]/40 bg-[var(--aqua-50)] px-2 py-0.5 rounded">
-              LIVE
-            </span>
-          </div>
-          <div className="flex-1 bg-[var(--metal-50)] rounded-2xl border border-[var(--metal-100)] relative overflow-hidden p-3 min-h-0">
-            <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-1/4 left-0" />
-            <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-2/4 left-0" />
-            <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-3/4 left-0" />
-            <div className="relative w-full h-full flex items-end justify-between gap-1">
-              {Array.from({ length: 18 }).map((_, i) => {
-                const h = 30 + Math.sin(i * 0.6 + time.getSeconds() * 0.1) * 25;
-                return (
-                  <div
-                    key={i}
-                    className="flex-1 bg-gradient-to-t from-[var(--aqua-500)] to-[var(--aqua-300)] rounded-t-sm transition-all duration-700 opacity-80"
-                    style={{ height: `${h}%` }}
-                  />
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex justify-between items-center mt-3 shrink-0">
-            <span className="font-data text-[10px] text-[var(--metal-500)]">
-              Updated {time.toLocaleTimeString()}
-            </span>
-            <span className="font-data text-[10px] text-[var(--metal-500)]">
-              Probe ID: 884-X
-            </span>
-          </div>
-        </div>
+{/*         <div className="bg-white/85 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-3xl p-5 flex-1 flex flex-col min-h-0 overflow-hidden"> */}
+{/*           <div className="flex justify-between items-center mb-3 shrink-0"> */}
+{/*             <h3 className="text-xs font-semibold text-[var(--metal-800)]"> */}
+{/*               Depth Profile · Last 12 min */}
+{/*             </h3> */}
+{/*             <span className="font-data text-[10px] text-[var(--aqua-600)] border border-[var(--aqua-300)]/40 bg-[var(--aqua-50)] px-2 py-0.5 rounded"> */}
+{/*               LIVE */}
+{/*             </span> */}
+{/*           </div> */}
+{/*           <div className="flex-1 bg-[var(--metal-50)] rounded-2xl border border-[var(--metal-100)] relative overflow-hidden p-3 min-h-0"> */}
+{/*             <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-1/4 left-0" /> */}
+{/*             <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-2/4 left-0" /> */}
+{/*             <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-3/4 left-0" /> */}
+{/*             <div className="relative w-full h-full flex items-end justify-between gap-1"> */}
+{/*               {Array.from({ length: 18 }).map((_, i) => { */}
+{/*                 const h = 30 + Math.sin(i * 0.6 + time.getSeconds() * 0.1) * 25; */}
+{/*                 return ( */}
+{/*                   <div */}
+{/*                     key={i} */}
+{/*                     className="flex-1 bg-gradient-to-t from-[var(--aqua-500)] to-[var(--aqua-300)] rounded-t-sm transition-all duration-700 opacity-80" */}
+{/*                     style={{ height: `${h}%` }} */}
+{/*                   /> */}
+{/*                 ); */}
+{/*               })} */}
+{/*             </div> */}
+{/*           </div> */}
+{/*           <div className="flex justify-between items-center mt-3 shrink-0"> */}
+{/*             <span className="font-data text-[10px] text-[var(--metal-500)]"> */}
+{/*               Updated {time.toLocaleTimeString()} */}
+{/*             </span> */}
+{/*             <span className="font-data text-[10px] text-[var(--metal-500)]"> */}
+{/*               Probe ID: 884-X */}
+{/*             </span> */}
+{/*           </div> */}
+{/*         </div> */}
       </aside>
     </div>
   );
