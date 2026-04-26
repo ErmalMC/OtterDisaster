@@ -11,7 +11,6 @@ import otterLogo from "../../public/otter-logo.svg";
 
 import { fetchHealth, predictWaterQuality, fetchArduinoReading } from "../utils/aquaSenseApi.js";
 
-// Location updated to River Vardar – Saraj
 const MAP_CENTER = [42.0000, 21.3278];
 const MAP_ZOOM = 12;
 const DEFAULT_SENSOR_INPUT = {
@@ -114,6 +113,20 @@ function buildMetrics(prediction, health, sensorInput) {
       bar: clamp(satelliteAge <= 2 ? 84 : satelliteAge <= 5 ? 62 : 36, 20, 100),
     },
   ];
+}
+
+// Hardcoded WQI calculator (from Dashboard(1)) for presentation
+function getWQI(tds, ph) {
+  const tdsOk = tds <= 150;
+  const phPerfect = ph >= 7.0 && ph <= 7.3;
+  const phHigh = ph > 8.0;
+
+  if (tdsOk && phPerfect) return 95;
+  if (tdsOk && !phHigh) return 94;
+  if (tdsOk && phHigh) return 80;
+  if (!tdsOk && !phHigh) return 60;
+  if (!tdsOk && phHigh) return 47;
+  return 60;
 }
 
 function LiveLoadingOverlay({ sampleCount, windowSeconds = 10, lastUpdated }) {
@@ -261,13 +274,16 @@ export function Dashboard({ onReset }) {
   const qualityIndex = prediction ? clamp(Math.round(100 - anomalyScore * 100), 0, 100) : 94;
   const isHealthy = health?.status === "ok" && !healthError;
 
-  const stabilityLabel = prediction
-      ? qualityIndex >= 90
-          ? "Optimal Conditions"
-          : qualityIndex >= 70
-              ? "Acceptable Conditions"
-              : "Degraded Conditions"
-      : "Awaiting backend";
+  // WQI score derived from current sensor input
+  const wqiScore = getWQI(
+      toNumber(sensorInput.tds, DEFAULT_SENSOR_INPUT.tds),
+      toNumber(sensorInput.ph, DEFAULT_SENSOR_INPUT.ph),
+  );
+
+  const stabilityLabel =
+      wqiScore >= 90 ? "Optimal Conditions"
+          : wqiScore >= 70 ? "Acceptable Conditions"
+              : "Degraded Conditions";
 
   const headline = prediction
       ? (prediction.is_anomaly ? "Attention required" : stabilityLabel)
@@ -333,13 +349,14 @@ export function Dashboard({ onReset }) {
   return (
       <div className="h-dvh w-full relative bg-[var(--metal-200)] font-sans text-[var(--metal-800)] overflow-hidden flex animate-[fade-in_0.6s_ease-out]">
         <style dangerouslySetInnerHTML={{ __html: `
-          .custom-scrollbar::-webkit-scrollbar { width: 5px; }
-          .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-          .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--metal-300); border-radius: 10px; }
-          .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--aqua-400); }
-          .custom-scrollbar { scrollbar-width: thin; scrollbar-color: var(--metal-300) transparent; }
-        `}} />
+        .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--metal-300); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--aqua-400); }
+        .custom-scrollbar { scrollbar-width: thin; scrollbar-color: var(--metal-300) transparent; }
+      `}} />
 
+        {/* Map background */}
         <div className="absolute inset-0 z-0">
           <MapContainer
               center={MAP_CENTER}
@@ -423,6 +440,7 @@ export function Dashboard({ onReset }) {
           </div>
         </div>
 
+        {/* Top right status */}
         <div className="absolute top-6 right-6 z-20 flex gap-3">
           <button
               onClick={onReset}
@@ -443,7 +461,9 @@ export function Dashboard({ onReset }) {
           </div>
         </div>
 
+        {/* Main panel */}
         <aside className="relative z-20 w-[440px] max-w-[92vw] h-[calc(100dvh-3rem)] m-6 flex flex-col gap-4 overflow-y-auto pr-3 custom-scrollbar animate-[fade-up_0.6s_ease-out_0.1s_both]">
+
           {/* Header card */}
           <div className="bg-white/85 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-3xl p-6 shrink-0 relative overflow-hidden">
             <div className="absolute top-2 left-2 size-2 border-t border-l border-[var(--metal-300)]" />
@@ -468,23 +488,23 @@ export function Dashboard({ onReset }) {
               </div>
             </div>
 
-            {/* Water Stability Index */}
+            {/* WQI badge */}
             <div className="bg-gradient-to-r from-[oklch(0.95_0.06_160)] to-[var(--aqua-100)] border border-[oklch(0.85_0.1_160)]/30 rounded-2xl p-4 flex items-center justify-between gap-4">
               <div>
                 <p className="font-data text-[11px] uppercase tracking-widest text-[oklch(0.45_0.12_160)] font-semibold mb-0.5">
-                  Water Stability Index
+                  Water Quality Index
                 </p>
                 <p className="text-[var(--metal-900)] font-medium text-sm">
                   {headline}
                 </p>
               </div>
               <div className="bg-white rounded-xl px-3.5 py-2 shadow-sm border border-white text-right">
-                <span className="font-data text-3xl font-bold text-[var(--status-good)] tabular-nums">
-                  {qualityIndex}
-                </span>
+              <span className="font-data text-3xl font-bold text-[var(--status-good)] tabular-nums">
+                {wqiScore}
+              </span>
                 <span className="font-data text-xs text-[var(--metal-500)] ml-1">
-                  /100
-                </span>
+                /100
+              </span>
               </div>
             </div>
 
@@ -497,11 +517,11 @@ export function Dashboard({ onReset }) {
                       liveMode ? "bg-[var(--aqua-500)]" : "bg-[var(--metal-300)]"
                   }`}
               >
-                <span
-                    className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${
-                        liveMode ? "translate-x-4" : "translate-x-0.5"
-                    }`}
-                />
+              <span
+                  className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${
+                      liveMode ? "translate-x-4" : "translate-x-0.5"
+                  }`}
+              />
               </button>
               <span className="text-xs font-medium text-[var(--metal-700)]">
               {liveMode ? (
@@ -521,9 +541,9 @@ export function Dashboard({ onReset }) {
             {/* Input form */}
             <form onSubmit={handleSubmit} className="mt-0 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
               <label className="block">
-                <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold">
-                  TDS
-                </span>
+              <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold">
+                TDS
+              </span>
                 <input
                     type="number"
                     min="0"
@@ -536,9 +556,9 @@ export function Dashboard({ onReset }) {
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold">
-                  pH
-                </span>
+              <span className="mb-1 block text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold">
+                pH
+              </span>
                 <input
                     type="number"
                     min="0"
@@ -602,9 +622,9 @@ export function Dashboard({ onReset }) {
                     <span className="size-1.5 rounded-full" style={{ backgroundColor: statusColor[metric.status] }} />
                   </div>
                   <div className="flex items-baseline gap-1">
-                    <span className="font-data text-3xl font-semibold tracking-tight text-[var(--metal-900)] tabular-nums">
-                      {metric.value}
-                    </span>
+                <span className="font-data text-3xl font-semibold tracking-tight text-[var(--metal-900)] tabular-nums">
+                  {metric.value}
+                </span>
                     <span className="font-data text-xs text-[var(--metal-500)]">{metric.unit}</span>
                   </div>
                   <div className="w-full h-1 bg-[var(--metal-100)] rounded-full mt-3 overflow-hidden">
@@ -618,69 +638,7 @@ export function Dashboard({ onReset }) {
             ))}
           </div>
 
-          {/* Backend verdict card */}
-          <div className="bg-white/85 backdrop-blur-2xl border border-white/60 shadow-[var(--shadow-glass)] rounded-3xl p-5 shrink-0 flex flex-col min-h-[420px] mb-4">
-            <div className="flex justify-between items-center mb-3 shrink-0 gap-3">
-              <h3 className="text-xs font-semibold text-[var(--metal-800)]">
-                Backend verdict · Live response
-              </h3>
-              <span className="font-data text-[10px] text-[var(--aqua-600)] border border-[var(--aqua-300)]/40 bg-[var(--aqua-50)] px-2 py-0.5 rounded whitespace-nowrap">
-                {prediction?.timestamp ? formatTime(prediction.timestamp) : "Awaiting query"}
-              </span>
-            </div>
-
-            <div className="grid gap-3 mb-3 shrink-0 sm:grid-cols-2">
-              <div className="rounded-2xl border border-[var(--metal-100)] bg-[var(--metal-50)] p-3">
-                <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold mb-1">
-                  Anomaly state
-                </p>
-                <p className="text-sm font-medium text-[var(--metal-900)]">
-                  {prediction ? (prediction.is_anomaly ? "Anomaly detected" : "Normal") : "Waiting for backend"}
-                </p>
-                <p className="mt-1 text-xs text-[var(--metal-500)]">
-                  Severity: {prediction?.severity ?? "—"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-[var(--metal-100)] bg-[var(--metal-50)] p-3">
-                <p className="text-[10px] uppercase tracking-[0.25em] text-[var(--metal-500)] font-semibold mb-1">
-                  Data mode
-                </p>
-                <p className="text-sm font-medium text-[var(--metal-900)]">
-                  {prediction?.data_mode ?? "—"}
-                </p>
-                <p className="mt-1 text-xs text-[var(--metal-500)]">
-                  Confidence: {prediction?.confidence_pct ?? "—"}%
-                </p>
-              </div>
-            </div>
-
-            {/* Depth / activity chart */}
-            <div className="flex-1 bg-[var(--metal-50)] rounded-2xl border border-[var(--metal-100)] relative overflow-hidden p-3 min-h-[140px]">
-              <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-1/4 left-0" />
-              <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-2/4 left-0" />
-              <div className="w-full border-t border-dashed border-[var(--metal-200)] absolute top-3/4 left-0" />
-              <div className="relative w-full h-full flex items-end justify-between gap-1">
-                {Array.from({ length: 18 }).map((_, index) => {
-                  const barHeight = 30 + Math.sin(index * 0.6 + time.getSeconds() * 0.1) * 25;
-                  return (
-                      <div
-                          key={index}
-                          className="flex-1 bg-gradient-to-t from-[var(--aqua-500)] to-[var(--aqua-300)] rounded-t-sm transition-all duration-700 opacity-80"
-                          style={{ height: `${barHeight}%` }}
-                      />
-                  );
-                })}
-              </div>
-            </div>
-            <div className="flex justify-between items-center mt-3 shrink-0 gap-3">
-              <span className="font-data text-[10px] text-[var(--metal-500)]">
-                Updated {formatTime(time)}
-              </span>
-              <span className="font-data text-[10px] text-[var(--metal-500)]">
-                API: {loadingHealth ? "syncing" : health?.status ?? "offline"}
-              </span>
-            </div>
-          </div>
+          {/* Backend verdict card — removed */}
         </aside>
 
         {liveMode && isCollecting && (
