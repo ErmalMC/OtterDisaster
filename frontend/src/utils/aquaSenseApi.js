@@ -70,3 +70,18 @@ export function reloadSatelliteData() {
   });
 }
 
+export function fetchArduinoReading() {
+  return requestJson("/arduino", { method: "POST" });
+}
+
+export function fetchHistory(limit = 100) {
+  return requestJson(`/history?limit=${limit}`);
+}
+
+export function createPredictionStream(onMessage, onError) {
+  const es = new EventSource(buildApiUrl("/stream"));
+  es.onmessage = (e) => onMessage(JSON.parse(e.data));
+  es.onerror   = onError ?? (() => {});
+  return es; // caller calls es.close() to disconnect
+}
+
