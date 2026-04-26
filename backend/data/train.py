@@ -76,7 +76,7 @@ THRESHOLDS = {
     "ph_alkaline":  9.0,
     # Statistical
     "zscore_anomaly":        2.5,
-    "zscore_rolling_window": 30,
+    "zscore_rolling_window": 6,
     # Interaction
     "acid_mine_tds": 800.0,
     "acid_mine_ph":  6.5,
@@ -129,8 +129,7 @@ FEATURE_COLUMNS = [
     "lst_cyano_risk",     # lst_weight * (lst_celsius > 20°C flag) * ndci
     "lst_tds_interaction",# hot water + high TDS = evaporation/industrial signature
     # Rolling Z-scores
-    "z_ndti", "z_ndci", "z_chl_a", "z_cyano", "z_tds", "z_ph",
-    "z_lst",              # rolling Z-score of temperature — NEW
+    "z_ndti", "z_ndci", "z_chl_a", "z_cyano", "z_tds", "z_ph",            # rolling Z-score of temperature — NEW
     "multi_feature_z_count",
     # Lag features
     "tds_lag1", "ph_lag1", "ndti_lag1",
@@ -161,14 +160,20 @@ def load_satellite_data(path: Path) -> pd.DataFrame:
     end_date = max(df.index.max(), pd.Timestamp.today().normalize())
     daily_index = pd.date_range(df.index.min(), end_date, freq="D")
     df = df.reindex(df.index.union(daily_index))
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    numeric_cols = [c for c in df.select_dtypes(include=[np.number]).columns
+                    if c != "z_cyano_monthly"]
     df[numeric_cols] = df[numeric_cols].interpolate(method="time").ffill()
+    # z_cyano_monthly forward-filled only — no interpolation between monthly values
+    if "z_cyano_monthly" in df.columns:
+        df["z_cyano"] = df["z_cyano_monthly"].ffill().bfill()
     df = df.loc[daily_index].reset_index().rename(columns={"index": "timestamp"})
     log.info(f"[S2] Expanded to {len(df)} weekly observations")
 
     if "cyanobacteria" in df.columns:
-        df["cyanobacteria"] = np.log1p(df["cyanobacteria"].clip(lower=0))
-
+        cyano_real = df["cyanobacteria"].clip(lower=0)
+        roll = cyano_real.rolling(window=6, min_periods=3)
+        df["z_cyano_monthly"] = (cyano_real - roll.mean()) / roll.std().replace(0, np.nan)
+        df["cyanobacteria"] = np.log1p(cyano_real)
     return df
 
 
@@ -354,10 +359,14 @@ def add_rolling_zscores(df: pd.DataFrame) -> pd.DataFrame:
     for feat in z_features:
         if feat not in df.columns:
             continue
-        series   = cyano_real if feat == "cyanobacteria" else df[feat]
-        roll     = series.rolling(window=window, min_periods=5)
+        # z_cyano computed on monthly data before expansion — use that instead
+        if feat == "cyanobacteria" and "z_cyano_monthly" in df.columns:
+            df["z_cyano"] = df["z_cyano_monthly"].ffill()
+            continue
+        series = cyano_real if feat == "cyanobacteria" else df[feat]
+        roll = series.rolling(window=window, min_periods=5)
         roll_mean = roll.mean()
-        roll_std  = roll.std().replace(0, np.nan)
+        roll_std = roll.std().replace(0, np.nan)
         df[f"z_{feat}"] = (series - roll_mean) / roll_std
 
     # ── NEW: Temperature rolling Z-score ─────────────────────────────────────
