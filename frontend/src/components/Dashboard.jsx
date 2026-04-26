@@ -19,7 +19,7 @@ const SENSOR_POINTS = [
     position: [41.9973, 21.428],
     active: false,
     label: "OTTER-04",
-    reading: "WQI 94",
+    reading: "WQI ${WQI_SCORE}",
     status: "Optimal",
     depth: "3.2 m",
     note: "Primary telemetry unit",
@@ -28,7 +28,7 @@ const SENSOR_POINTS = [
     id: "sensor-2",
     position: [42.0038, 21.454],
     label: "OTTER-05",
-    reading: "WQI 89",
+    reading: "WQI ${WQI_SCORE}",
     status: "Stable",
     depth: "2.6 m",
     note: "Secondary sampling point",
@@ -83,6 +83,25 @@ const baseMetrics = [
     bar: 50,
   },
 ];
+
+// Hardcoded WQI calculator for presentation
+function getWQI(tds, ph) {
+  const tdsOk = tds <= 150;
+  const phPerfect = ph >= 7.0 && ph <= 7.3;
+  const phHigh = ph > 8.0;
+
+  if (tdsOk && phPerfect) return 95;       // Best case
+  if (tdsOk && !phHigh) return 94;         // TDS fine, pH acceptable (7.3–8.0)
+  if (tdsOk && phHigh) return 80;          // TDS fine but pH > 8 → –14
+  if (!tdsOk && !phHigh) return 60;        // TDS bad, pH acceptable
+  if (!tdsOk && phHigh) return 47;         // TDS bad + pH > 8 → 60 – 13
+  return 60;
+}
+
+// Your sensor reading (swap these two values for the demo)
+const DEMO_TDS = 150;   // ← change this
+const DEMO_PH  = 7.1;   // ← change this
+const WQI_SCORE = getWQI(DEMO_TDS, DEMO_PH);
 
 const statusColor = {
   good: "var(--status-good)",
@@ -267,13 +286,16 @@ export function Dashboard({ onReset }) {
               <p className="font-data text-[11px] uppercase tracking-widest text-[oklch(0.45_0.12_160)] font-semibold mb-0.5">
                 Water Stability Index
               </p>
-              <p className="text-[var(--metal-900)] font-medium text-sm">
-                Optimal Conditions
-              </p>
+{/*               <p className="text-[var(--metal-900)] font-medium text-sm"> */}
+{/*                 Optimal Conditions */}
+{/*               </p> */}
+                  <p className="text-[var(--metal-900)] font-medium text-sm">
+                      {WQI_SCORE >= 90 ? "Optimal Conditions" : WQI_SCORE >= 70 ? "Acceptable Conditions" : "Degraded Conditions"}
+                  </p>
             </div>
             <div className="bg-white rounded-xl px-3.5 py-2 shadow-sm border border-white">
               <span className="font-data text-3xl font-bold text-[var(--status-good)] tabular-nums">
-                94
+                {WQI_SCORE}
               </span>
               <span className="font-data text-xs text-[var(--metal-500)] ml-1">
                 /100
