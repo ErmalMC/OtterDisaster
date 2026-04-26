@@ -32,7 +32,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, Response, stream_with_context
 from flask_cors import CORS
 
-from backend.data.inference import AquaSenseInference
+from .data.inference import AquaSenseInference
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ app = Flask(__name__)
 CORS(app)   # allow the UI (different port) to call the API
 
 # ── Initialise engine at startup ─────────────────────────────────────────────
-MODEL_PATH    = os.environ.get("MODEL_PATH",    "models/rf_anomaly_model.pkl")
+MODEL_PATH    = os.environ.get("MODEL_PATH",    "data/models/rf_anomaly_model.pkl")
 SAT_PARQUET   = os.environ.get("SAT_PARQUET",   "data/vardar_wq_results/vardar_wq_merged.parquet")
 LAT           = float(os.environ.get("LAT", 41.99))
 LON           = float(os.environ.get("LON", 21.43))
