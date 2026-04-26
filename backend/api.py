@@ -42,7 +42,7 @@ CORS(app)   # allow the UI (different port) to call the API
 
 # ── Initialise engine at startup ─────────────────────────────────────────────
 MODEL_PATH    = os.environ.get("MODEL_PATH",    "models/rf_anomaly_model.pkl")
-SAT_PARQUET   = os.environ.get("SAT_PARQUET",   "vardar_wq_results/vardar_wq_merged.parquet")
+SAT_PARQUET   = os.environ.get("SAT_PARQUET",   "data/vardar_wq_results/vardar_wq_merged.parquet")
 LAT           = float(os.environ.get("LAT", 41.99))
 LON           = float(os.environ.get("LON", 21.43))
 ARDUINO_CSV   = os.environ.get("ARDUINO_CSV",   "data/arduino_output.csv")

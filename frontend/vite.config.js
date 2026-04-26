@@ -7,9 +7,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      "/api": {
-        target: process.env.VITE_BACKEND_ORIGIN || "http://127.0.0.1:5000",
+      '/api': {
+        target: 'http://localhost:5000',
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''), // strips /api before forwarding
       },
     },
   },
